@@ -117,13 +117,13 @@
             android:textColor="@color/text_primary" />
 
         <Button
-            android:id="@+id/btnHint"
+            android:id="@+id/btnLock"
             style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:minWidth="0dp"
-            android:text="@string/hint"
+            android:text="@string/lock_off"
             android:textColor="@color/text_primary" />
     </LinearLayout>
 

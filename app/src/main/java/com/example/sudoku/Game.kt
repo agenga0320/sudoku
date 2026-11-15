@@ -46,22 +46,6 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
         return true
     }
 
-    /**
-     * Reveals the correct digit of [preferred] if that cell is not yet right,
-     * otherwise of a random unsolved cell. Returns the revealed cell, or -1.
-     */
-    fun hint(preferred: Int): Int {
-        if (isSolved) return -1
-        val i = if (preferred >= 0 && values[preferred] != solution[preferred]) {
-            preferred
-        } else {
-            (0 until Sudoku.CELLS).filter { values[it] != solution[it] }.random()
-        }
-        snapshot()
-        place(i, solution[i])
-        return i
-    }
-
     fun undo(): Boolean {
         val state = undoStack.removeLastOrNull() ?: return false
         state.copyInto(values, 0, 0, Sudoku.CELLS)

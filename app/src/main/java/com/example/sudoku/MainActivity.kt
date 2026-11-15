@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -24,10 +25,17 @@ class MainActivity : Activity() {
     private lateinit var txtTime: TextView
     private lateinit var btnUndo: Button
     private lateinit var btnNotes: Button
+    private lateinit var btnLock: Button
     private val numberButtons = ArrayList<Button>()
+    private val numberBackgrounds = ArrayList<Drawable?>()
+    private lateinit var lockedBackground: Drawable
 
     private var game: Game? = null
     private var notesMode = false
+
+    // In lock mode a number button picks the digit and tapping an empty cell fills it in.
+    private var lockMode = false
+    private var lockedDigit = 0
     private var generating = false
 
     private val handler = Handler(Looper.getMainLooper())
@@ -53,9 +61,12 @@ class MainActivity : Activity() {
         txtTime = findViewById(R.id.txtTime)
         btnUndo = findViewById(R.id.btnUndo)
         btnNotes = findViewById(R.id.btnNotes)
+        btnLock = findViewById(R.id.btnLock)
+        lockedBackground = getDrawable(R.drawable.bg_locked_digit)!!
         buildNumpad()
 
         board.onCellSelected = { refresh() }
+        board.onCellTapped = { onCellTapped(it) }
         findViewById<Button>(R.id.btnNew).setOnClickListener { chooseDifficulty() }
         findViewById<Button>(R.id.btnImport).setOnClickListener { showImportDialog() }
         btnUndo.setOnClickListener { if (game?.undo() == true) refresh() }
@@ -66,7 +77,11 @@ class MainActivity : Activity() {
             notesMode = !notesMode
             refresh()
         }
-        findViewById<Button>(R.id.btnHint).setOnClickListener { onHint() }
+        btnLock.setOnClickListener {
+            lockMode = !lockMode
+            lockedDigit = 0
+            refresh()
+        }
 
         val saved = getPreferences(MODE_PRIVATE).getString(KEY_GAME, null)?.let(Game::decode)
         if (saved != null) {
@@ -104,25 +119,32 @@ class MainActivity : Activity() {
             }
             numpad.addView(button, LinearLayout.LayoutParams(0, height, 1f))
             numberButtons += button
+            numberBackgrounds += button.background
         }
     }
 
     private fun onDigit(digit: Int) {
         val g = game ?: return
+        if (generating) return
+        if (lockMode) {
+            lockedDigit = if (lockedDigit == digit) 0 else digit
+            refresh()
+            return
+        }
         val cell = board.selected
-        if (generating || cell < 0) return
-        val changed = if (notesMode) g.toggleNote(cell, digit) else g.enter(cell, digit)
-        if (!changed) return
-        refresh()
-        if (g.isSolved) showSolved(g)
+        if (cell < 0) return
+        place(g, cell, digit)
     }
 
-    private fun onHint() {
+    private fun onCellTapped(cell: Int) {
         val g = game ?: return
-        if (generating) return
-        val cell = g.hint(board.selected)
-        if (cell < 0) return
-        board.selected = cell
+        if (generating || lockedDigit == 0 || g.values[cell] != 0) return
+        place(g, cell, lockedDigit)
+    }
+
+    private fun place(g: Game, cell: Int, digit: Int) {
+        val changed = if (notesMode) g.toggleNote(cell, digit) else g.enter(cell, digit)
+        if (!changed) return
         refresh()
         if (g.isSolved) showSolved(g)
     }
@@ -244,7 +266,12 @@ class MainActivity : Activity() {
 
     private fun refresh() {
         val g = game ?: return
+        // A digit that is complete can no longer be placed, so it can't stay locked.
+        if (lockedDigit != 0 && g.countOf(lockedDigit) >= 9) lockedDigit = 0
+        board.highlightDigit = lockedDigit
         board.invalidate()
+        btnLock.setText(if (lockMode) R.string.lock_on else R.string.lock_off)
+        btnLock.setTextColor(getColor(if (lockMode) R.color.accent else R.color.text_primary))
         txtDifficulty.text = difficultyLabel(g.difficulty)
         txtMistakes.text = getString(R.string.mistakes, g.mistakes)
         txtTime.text = formatTime(g.elapsedSeconds)
@@ -257,6 +284,7 @@ class MainActivity : Activity() {
             val available = g.countOf(index + 1) < 9
             button.isEnabled = available
             button.alpha = if (available) 1f else 0.25f
+            button.background = if (index + 1 == lockedDigit) lockedBackground else numberBackgrounds[index]
         }
     }
 

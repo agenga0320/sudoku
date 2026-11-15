@@ -140,19 +140,6 @@ class SudokuTest {
     }
 
     @Test
-    fun hintRevealsSelectedCell() {
-        val puzzle = Sudoku.generate(Difficulty.HARD, Random(3))
-        val game = Game(Difficulty.HARD, puzzle.solution, puzzle.givens)
-        val cell = puzzle.givens.indexOf(0)
-        assertEquals(cell, game.hint(cell))
-        assertEquals(puzzle.solution[cell], game.values[cell])
-        val other = game.hint(cell)
-        assertTrue(other >= 0 && other != cell)
-        while (!game.isSolved) game.hint(-1)
-        assertEquals(-1, game.hint(-1))
-    }
-
-    @Test
     fun encodeDecodeRoundTrip() {
         val puzzle = Sudoku.generate(Difficulty.HARD, Random(4))
         val game = Game(Difficulty.HARD, puzzle.solution, puzzle.givens)

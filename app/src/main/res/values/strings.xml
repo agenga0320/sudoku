@@ -10,7 +10,8 @@
     <string name="erase">清除</string>
     <string name="notes_off">筆記：關</string>
     <string name="notes_on">筆記：開</string>
-    <string name="hint">提示</string>
+    <string name="lock_off">鎖定：關</string>
+    <string name="lock_on">鎖定：開</string>
     <string name="generating">產生題目中…</string>
     <string name="solved_title">完成！</string>
     <string name="solved_message">難度：%1$s\n時間：%2$s\n錯誤：%3$d</string>

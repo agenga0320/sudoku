@@ -28,7 +28,17 @@ class BoardView @JvmOverloads constructor(
             invalidate()
         }
 
+    /** Digit whose cells are highlighted instead of the selected cell's digit; 0 for none. */
+    var highlightDigit = 0
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     var onCellSelected: ((Int) -> Unit)? = null
+
+    /** Called for every touch down on a cell, even one that is already selected. */
+    var onCellTapped: ((Int) -> Unit)? = null
 
     private val density = resources.displayMetrics.density
     private val thick = 2.5f * density
@@ -93,14 +103,18 @@ class BoardView @JvmOverloads constructor(
     }
 
     private fun drawHighlights(canvas: Canvas, g: Game) {
-        if (selected < 0) return
-        val selectedDigit = g.values[selected]
-        val peers = Sudoku.peers[selected]
+        val digit = when {
+            highlightDigit != 0 -> highlightDigit
+            selected >= 0 -> g.values[selected]
+            else -> 0
+        }
+        val peers = if (selected >= 0) Sudoku.peers[selected] else null
+        if (digit == 0 && peers == null) return
         for (i in 0 until Sudoku.CELLS) {
             fillPaint.color = when {
                 i == selected -> selectedColor
-                selectedDigit != 0 && g.values[i] == selectedDigit -> sameColor
-                i in peers -> peerColor
+                digit != 0 && g.values[i] == digit -> sameColor
+                peers != null && i in peers -> peerColor
                 else -> continue
             }
             val left = origin + (i % 9) * cellSize
@@ -152,6 +166,7 @@ class BoardView @JvmOverloads constructor(
                     selected = index
                     onCellSelected?.invoke(index)
                 }
+                if (event.action == MotionEvent.ACTION_DOWN) onCellTapped?.invoke(index)
             }
         }
         return true
