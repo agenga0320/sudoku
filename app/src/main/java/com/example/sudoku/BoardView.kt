@@ -55,10 +55,7 @@ class BoardView @JvmOverloads constructor(
         strokeCap = Paint.Cap.SQUARE
     }
     private val digitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
-    private val notePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER
-        color = context.getColor(R.color.note)
-    }
+    private val notePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
 
     private val boardColor = context.getColor(R.color.board_bg)
     private val selectedColor = context.getColor(R.color.cell_selected)
@@ -66,6 +63,7 @@ class BoardView @JvmOverloads constructor(
     private val peerColor = context.getColor(R.color.cell_peer)
     private val givenColor = context.getColor(R.color.digit_given)
     private val userColor = context.getColor(R.color.digit_user)
+    private val noteColor = context.getColor(R.color.note)
 
     private val boldTypeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
 
@@ -101,12 +99,15 @@ class BoardView @JvmOverloads constructor(
         }
     }
 
+    /** The digit being emphasised: the locked digit, else the selected cell's digit; 0 for none. */
+    private fun activeDigit(g: Game) = when {
+        highlightDigit != 0 -> highlightDigit
+        selected >= 0 -> g.values[selected]
+        else -> 0
+    }
+
     private fun drawHighlights(canvas: Canvas, g: Game) {
-        val digit = when {
-            highlightDigit != 0 -> highlightDigit
-            selected >= 0 -> g.values[selected]
-            else -> 0
-        }
+        val digit = activeDigit(g)
         val peers = if (selected >= 0) Sudoku.peers[selected] else null
         if (digit == 0 && peers == null) return
         for (i in 0 until Sudoku.CELLS) {
@@ -128,6 +129,7 @@ class BoardView @JvmOverloads constructor(
         notePaint.textSize = cell * 0.26f
         val digitOffset = -(digitPaint.ascent() + digitPaint.descent()) / 2
         val noteOffset = -(notePaint.ascent() + notePaint.descent()) / 2
+        val active = activeDigit(g)
 
         for (i in 0 until Sudoku.CELLS) {
             val left = origin + (i % 9) * cell
@@ -143,6 +145,8 @@ class BoardView @JvmOverloads constructor(
                     if (g.notes[i] and (1 shl d) == 0) continue
                     val x = left + ((d - 1) % 3 + 0.5f) * sub
                     val y = top + ((d - 1) / 3 + 0.5f) * sub + noteOffset
+                    notePaint.color = if (d == active) userColor else noteColor
+                    notePaint.typeface = if (d == active) boldTypeface else Typeface.DEFAULT
                     canvas.drawText(d.toString(), x, y, notePaint)
                 }
             }
