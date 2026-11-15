@@ -136,8 +136,14 @@ class MainActivity : Activity() {
 
     private fun onCellTapped(cell: Int) {
         val g = game ?: return
-        if (generating || lockedDigit == 0 || g.values[cell] != 0) return
-        place(g, cell, lockedDigit)
+        if (generating || !lockMode) return
+        if (g.isGiven(cell)) {
+            // Tapping one of the puzzle's own digits locks onto that digit.
+            lockedDigit = g.values[cell]
+            refresh()
+        } else if (lockedDigit != 0 && g.values[cell] == 0) {
+            place(g, cell, lockedDigit)
+        }
     }
 
     private fun place(g: Game, cell: Int, digit: Int) {
