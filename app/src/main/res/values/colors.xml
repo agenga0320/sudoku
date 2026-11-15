@@ -1,0 +1,17 @@
+<resources>
+    <color name="app_bg">#F5F7FA</color>
+    <color name="accent">#1565C0</color>
+    <color name="text_primary">#1B1F24</color>
+    <color name="text_secondary">#6B7480</color>
+
+    <color name="board_bg">#FFFFFF</color>
+    <color name="cell_selected">#BBDEFB</color>
+    <color name="cell_same">#C5D8F0</color>
+    <color name="cell_peer">#E8EEF7</color>
+    <color name="line_thin">#B0B8C4</color>
+    <color name="line_thick">#263238</color>
+    <color name="digit_given">#1B1F24</color>
+    <color name="digit_user">#1565C0</color>
+    <color name="digit_wrong">#D32F2F</color>
+    <color name="note">#6B7480</color>
+</resources>

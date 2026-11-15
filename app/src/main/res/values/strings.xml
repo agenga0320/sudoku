@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">數獨</string>
+    <string name="new_game">新遊戲</string>
+    <string name="choose_difficulty">選擇難度</string>
+    <string name="easy">簡單</string>
+    <string name="medium">中等</string>
+    <string name="hard">困難</string>
+    <string name="mistakes">錯誤：%1$d</string>
+    <string name="undo">復原</string>
+    <string name="erase">清除</string>
+    <string name="notes_off">筆記：關</string>
+    <string name="notes_on">筆記：開</string>
+    <string name="hint">提示</string>
+    <string name="generating">產生題目中…</string>
+    <string name="solved_title">完成！</string>
+    <string name="solved_message">難度：%1$s\n時間：%2$s\n錯誤：%3$d</string>
+    <string name="close">關閉</string>
+
+    <string name="custom">自訂</string>
+    <string name="import_puzzle">匯入</string>
+    <string name="import_title">匯入數獨題目</string>
+    <string name="import_instructions">輸入 9 排數字，每排 9 個，空格用 0 表示。</string>
+    <string name="import_example">530070000\n600195000\n098000060\n800060003\n400803001\n700020006\n060000280\n000419005\n000080079</string>
+    <string name="import_ai_tip">手邊只有題目照片？複製下方提示詞，連同照片一起傳給 AI（例如 Claude、ChatGPT），再把 AI 的回覆貼到上面。</string>
+    <string name="copy_prompt">複製 AI 提示詞</string>
+    <string name="prompt_copied">已複製提示詞</string>
+    <string name="import_start">開始</string>
+    <string name="cancel">取消</string>
+    <string name="import_checking">檢查題目中…</string>
+    <string name="import_error_length">需要剛好 81 個數字（9 排 × 9 個），目前有 %1$d 個。</string>
+    <string name="import_error_conflict">第 %1$d 排第 %2$d 個數字 %3$d 與同一行、列或九宮格的數字重複。</string>
+    <string name="import_error_no_solution">這個題目無解，請檢查數字是否輸入正確。</string>
+    <string name="import_error_multiple">這個題目有不只一組解，可能漏了數字，請檢查後再試。</string>
+    <string name="import_error_full">題目沒有空格（0），沒有可以填的格子。</string>
+    <string name="ai_prompt">請辨識這張圖片中的數獨題目，並嚴格依照下列格式輸出：\n\n1. 總共 9 排，每排剛好 9 個數字，由上到下、由左到右對應盤面。\n2. 空白的格子用數字 0 表示。\n3. 同一排的數字之間不要有空格、逗號或任何其他符號。\n4. 只輸出這 9 排數字，不要加上任何說明、標題或程式碼區塊。\n5. 輸出前請逐排核對：每排是否剛好 9 個數字、位置是否與圖片一致。看不清楚的格子請填 0，不要猜測。\n\n輸出範例：\n530070000\n600195000\n098000060\n800060003\n400803001\n700020006\n060000280\n000419005\n000080079</string>
+</resources>
