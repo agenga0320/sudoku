@@ -124,17 +124,20 @@ class SudokuTest {
     @Test
     fun wrongDigitsNotesAndUndo() {
         val puzzle = Sudoku.generate(Difficulty.MEDIUM, Random(2))
-        val game = Game(Difficulty.MEDIUM, puzzle.solution, puzzle.givens)
-        val cell = puzzle.givens.indexOf(0)
+        val withGivens = Game(Difficulty.MEDIUM, puzzle.solution, puzzle.givens)
         val given = puzzle.givens.indexOfFirst { it != 0 }
+        assertFalse(withGivens.enter(given, puzzle.givens[given] % 9 + 1))
+        assertFalse(withGivens.toggleNote(given, 1))
+        assertFalse(withGivens.canUndo)
+
+        // An empty board, so that no given gets in the way of the notes below.
+        val game = Game(Difficulty.CUSTOM, puzzle.solution, IntArray(Sudoku.CELLS))
+        val cell = 0
+        val peer = 1
         val right = puzzle.solution[cell]
         val wrong = right % 9 + 1
 
-        assertFalse(game.enter(given, wrong))
-        assertFalse(game.canUndo)
-
         // Placing a digit clears it from the notes of its peers, whether it is right or wrong.
-        val peer = Sudoku.peers[cell].first { !game.isGiven(it) }
         assertTrue(game.toggleNote(peer, right))
         assertTrue(game.toggleNote(peer, wrong))
         assertTrue(game.enter(cell, wrong))
@@ -151,6 +154,32 @@ class SudokuTest {
         assertTrue(game.erase(peer))
         assertEquals(0, game.notes[peer])
         assertFalse(game.erase(peer))
+    }
+
+    @Test
+    fun notesConflictingWithPlacedDigitsAreNotAdded() {
+        val puzzle = Sudoku.generate(Difficulty.EASY, Random(5))
+        val game = Game(Difficulty.CUSTOM, puzzle.solution, IntArray(Sudoku.CELLS))
+        assertTrue(game.enter(0, 5))
+
+        assertFalse(game.toggleNote(8, 5))  // same row
+        assertFalse(game.toggleNote(72, 5)) // same column
+        assertFalse(game.toggleNote(20, 5)) // same box
+        assertEquals(0, game.notes[8] or game.notes[72] or game.notes[20])
+        assertTrue(game.undo())             // the rejected notes left nothing to undo but the 5
+        assertFalse(game.canUndo)
+        assertTrue(game.enter(0, 5))
+
+        assertTrue(game.toggleNote(40, 5))  // not a peer
+        assertTrue(game.toggleNote(8, 6))   // a different digit
+        assertTrue(game.toggleNote(8, 6))   // and it can be removed again
+        assertEquals(0, game.notes[8])
+
+        // Givens block notes in the same way.
+        val given = puzzle.solution.copyOf().also { for (i in 1 until Sudoku.CELLS) it[i] = 0 }
+        val withGiven = Game(Difficulty.CUSTOM, puzzle.solution, given)
+        assertFalse(withGiven.toggleNote(1, given[0]))
+        assertTrue(withGiven.toggleNote(1, given[0] % 9 + 1))
     }
 
     @Test

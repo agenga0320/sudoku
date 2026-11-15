@@ -33,10 +33,17 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
         return true
     }
 
+    /**
+     * Adds or removes the note [digit] in cell [i]. A note is not added when the digit is
+     * already placed in the cell's row, column or box, since that is almost always a slip.
+     */
     fun toggleNote(i: Int, digit: Int): Boolean {
         if (isSolved || isGiven(i) || values[i] != 0) return false
+        val bit = 1 shl digit
+        val adding = notes[i] and bit == 0
+        if (adding && Sudoku.peers[i].any { values[it] == digit }) return false
         snapshot()
-        notes[i] = notes[i] xor (1 shl digit)
+        notes[i] = notes[i] xor bit
         return true
     }
 
