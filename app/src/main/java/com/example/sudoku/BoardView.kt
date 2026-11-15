@@ -66,7 +66,6 @@ class BoardView @JvmOverloads constructor(
     private val peerColor = context.getColor(R.color.cell_peer)
     private val givenColor = context.getColor(R.color.digit_given)
     private val userColor = context.getColor(R.color.digit_user)
-    private val wrongColor = context.getColor(R.color.digit_wrong)
 
     private val boldTypeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
 
@@ -135,11 +134,7 @@ class BoardView @JvmOverloads constructor(
             val top = origin + (i / 9) * cell
             val value = g.values[i]
             if (value != 0) {
-                digitPaint.color = when {
-                    g.isGiven(i) -> givenColor
-                    g.isWrong(i) -> wrongColor
-                    else -> userColor
-                }
+                digitPaint.color = if (g.isGiven(i)) givenColor else userColor
                 digitPaint.typeface = if (g.isGiven(i)) boldTypeface else Typeface.DEFAULT
                 canvas.drawText(value.toString(), left + cell / 2, top + cell / 2 + digitOffset, digitPaint)
             } else if (g.notes[i] != 0) {

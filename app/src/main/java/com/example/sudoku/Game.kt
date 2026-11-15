@@ -6,16 +6,15 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
 
     /** Pencil marks per cell, as a bitmask with bit d set for digit d. */
     val notes = IntArray(Sudoku.CELLS)
-    var mistakes = 0
     var elapsedSeconds = 0
 
     private val undoStack = ArrayDeque<IntArray>()
 
     val isSolved: Boolean get() = values.contentEquals(solution)
+    val isFull: Boolean get() = values.none { it == 0 }
     val canUndo: Boolean get() = undoStack.isNotEmpty()
 
     fun isGiven(i: Int) = givens[i] != 0
-    fun isWrong(i: Int) = values[i] != 0 && values[i] != solution[i]
     fun countOf(digit: Int) = values.count { it == digit }
 
     /** Puts [digit] in cell [i]; entering the digit already there removes it. */
@@ -26,8 +25,11 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
             values[i] = 0
             return true
         }
-        place(i, digit)
-        if (digit != solution[i]) mistakes++
+        // Wrong digits are treated exactly like right ones, so nothing gives them away.
+        values[i] = digit
+        notes[i] = 0
+        val bit = 1 shl digit
+        for (peer in Sudoku.peers[i]) notes[peer] = notes[peer] and bit.inv()
         return true
     }
 
@@ -53,15 +55,6 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
         return true
     }
 
-    private fun place(i: Int, digit: Int) {
-        values[i] = digit
-        notes[i] = 0
-        if (digit == solution[i]) {
-            val bit = 1 shl digit
-            for (peer in Sudoku.peers[i]) notes[peer] = notes[peer] and bit.inv()
-        }
-    }
-
     private fun snapshot() {
         undoStack.addLast(values + notes)
         if (undoStack.size > MAX_UNDO) undoStack.removeFirst()
@@ -69,7 +62,6 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
 
     fun encode(): String = listOf(
         difficulty.name,
-        mistakes,
         elapsedSeconds,
         solution.joinToString(""),
         givens.joinToString(""),
@@ -82,13 +74,13 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
 
         /** Restores a game saved with [encode]; returns null if the data is unusable. */
         fun decode(data: String): Game? = runCatching {
-            val parts = data.split(';')
-            require(parts.size == 7)
-            val game = Game(Difficulty.valueOf(parts[0]), digits(parts[3]), digits(parts[4]))
-            game.mistakes = parts[1].toInt()
-            game.elapsedSeconds = parts[2].toInt()
-            digits(parts[5]).copyInto(game.values)
-            val notes = parts[6].split(',').map { it.toInt() }
+            // Saves from versions up to 1.1.0 carry a mistake count as the second field.
+            val parts = data.split(';').let { if (it.size == 7) it.filterIndexed { i, _ -> i != 1 } else it }
+            require(parts.size == 6)
+            val game = Game(Difficulty.valueOf(parts[0]), digits(parts[2]), digits(parts[3]))
+            game.elapsedSeconds = parts[1].toInt()
+            digits(parts[4]).copyInto(game.values)
+            val notes = parts[5].split(',').map { it.toInt() }
             require(notes.size == Sudoku.CELLS)
             notes.toIntArray().copyInto(game.notes)
             game

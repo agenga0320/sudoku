@@ -21,7 +21,6 @@ class MainActivity : Activity() {
 
     private lateinit var board: BoardView
     private lateinit var txtDifficulty: TextView
-    private lateinit var txtMistakes: TextView
     private lateinit var txtTime: TextView
     private lateinit var btnUndo: Button
     private lateinit var btnNotes: Button
@@ -57,7 +56,6 @@ class MainActivity : Activity() {
 
         board = findViewById(R.id.board)
         txtDifficulty = findViewById(R.id.txtDifficulty)
-        txtMistakes = findViewById(R.id.txtMistakes)
         txtTime = findViewById(R.id.txtTime)
         btnUndo = findViewById(R.id.btnUndo)
         btnNotes = findViewById(R.id.btnNotes)
@@ -146,7 +144,12 @@ class MainActivity : Activity() {
         val changed = if (notesMode) g.toggleNote(cell, digit) else g.enter(cell, digit)
         if (!changed) return
         refresh()
-        if (g.isSolved) showSolved(g)
+        if (g.isSolved) {
+            showSolved(g)
+        } else if (g.isFull) {
+            // Mistakes are never pointed out while playing, so say so once nothing is left to fill.
+            Toast.makeText(this, R.string.full_but_wrong, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun chooseDifficulty() {
@@ -256,7 +259,6 @@ class MainActivity : Activity() {
                     R.string.solved_message,
                     difficultyLabel(g.difficulty),
                     formatTime(g.elapsedSeconds),
-                    g.mistakes,
                 )
             )
             .setPositiveButton(R.string.new_game) { _, _ -> chooseDifficulty() }
@@ -273,7 +275,6 @@ class MainActivity : Activity() {
         btnLock.setText(if (lockMode) R.string.lock_on else R.string.lock_off)
         btnLock.setTextColor(getColor(if (lockMode) R.color.accent else R.color.text_primary))
         txtDifficulty.text = difficultyLabel(g.difficulty)
-        txtMistakes.text = getString(R.string.mistakes, g.mistakes)
         txtTime.text = formatTime(g.elapsedSeconds)
         btnUndo.isEnabled = g.canUndo
         btnUndo.alpha = if (g.canUndo) 1f else 0.4f

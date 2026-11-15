@@ -103,12 +103,26 @@ class SudokuTest {
             if (!game.isGiven(i)) assertTrue(game.enter(i, puzzle.solution[i]))
         }
         assertTrue(game.isSolved)
-        assertEquals(0, game.mistakes)
+        assertTrue(game.isFull)
         assertFalse(game.enter(0, 1))
     }
 
     @Test
-    fun mistakesNotesAndUndo() {
+    fun fullBoardWithWrongDigitIsNotSolved() {
+        val puzzle = Sudoku.generate(Difficulty.EASY, Random(1))
+        val game = Game(Difficulty.EASY, puzzle.solution, puzzle.givens)
+        val first = puzzle.givens.indexOf(0)
+        for (i in 0 until Sudoku.CELLS) {
+            if (game.isGiven(i)) continue
+            assertFalse(game.isFull)
+            game.enter(i, if (i == first) puzzle.solution[i] % 9 + 1 else puzzle.solution[i])
+        }
+        assertTrue(game.isFull)
+        assertFalse(game.isSolved)
+    }
+
+    @Test
+    fun wrongDigitsNotesAndUndo() {
         val puzzle = Sudoku.generate(Difficulty.MEDIUM, Random(2))
         val game = Game(Difficulty.MEDIUM, puzzle.solution, puzzle.givens)
         val cell = puzzle.givens.indexOf(0)
@@ -119,20 +133,20 @@ class SudokuTest {
         assertFalse(game.enter(given, wrong))
         assertFalse(game.canUndo)
 
-        assertTrue(game.enter(cell, wrong))
-        assertTrue(game.isWrong(cell))
-        assertEquals(1, game.mistakes)
-        assertTrue(game.undo())
-        assertEquals(0, game.values[cell])
-
-        // A correct digit clears that digit from the notes of its peers.
+        // Placing a digit clears it from the notes of its peers, whether it is right or wrong.
         val peer = Sudoku.peers[cell].first { !game.isGiven(it) }
         assertTrue(game.toggleNote(peer, right))
         assertTrue(game.toggleNote(peer, wrong))
+        assertTrue(game.enter(cell, wrong))
+        assertEquals(wrong, game.values[cell])
+        assertEquals(1 shl right, game.notes[peer])
+        assertTrue(game.undo())
+        assertEquals(0, game.values[cell])
+        assertEquals((1 shl wrong) or (1 shl right), game.notes[peer])
+
         assertTrue(game.enter(cell, right))
         assertEquals(1 shl wrong, game.notes[peer])
         assertTrue(game.undo())
-        assertEquals((1 shl wrong) or (1 shl right), game.notes[peer])
 
         assertTrue(game.erase(peer))
         assertEquals(0, game.notes[peer])
@@ -150,12 +164,18 @@ class SudokuTest {
 
         val copy = Game.decode(game.encode())!!
         assertEquals(game.difficulty, copy.difficulty)
-        assertEquals(game.mistakes, copy.mistakes)
         assertEquals(123, copy.elapsedSeconds)
         assertArrayEquals(game.solution, copy.solution)
         assertArrayEquals(game.givens, copy.givens)
         assertArrayEquals(game.values, copy.values)
         assertArrayEquals(game.notes, copy.notes)
+
+        // Saves written before the mistake counter was removed still load.
+        val legacy = game.encode().replaceFirst(";", ";5;")
+        val fromLegacy = Game.decode(legacy)!!
+        assertEquals(123, fromLegacy.elapsedSeconds)
+        assertArrayEquals(game.values, fromLegacy.values)
+        assertArrayEquals(game.notes, fromLegacy.notes)
 
         assertNull(Game.decode("garbage"))
         assertNull(Game.decode(""))
