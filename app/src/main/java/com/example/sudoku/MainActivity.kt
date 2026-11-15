@@ -65,6 +65,8 @@ class MainActivity : Activity() {
 
         board.onCellSelected = { refresh() }
         board.onCellTapped = { onCellTapped(it) }
+        // Sliding across the board keeps writing the locked digit into the empty cells it passes.
+        board.onCellDragged = { fillLocked(it) }
         findViewById<Button>(R.id.btnNew).setOnClickListener { chooseDifficulty() }
         findViewById<Button>(R.id.btnImport).setOnClickListener { showImportDialog() }
         btnUndo.setOnClickListener { if (game?.undo() == true) refresh() }
@@ -141,9 +143,16 @@ class MainActivity : Activity() {
             // Tapping one of the puzzle's own digits locks onto that digit.
             lockedDigit = g.values[cell]
             refresh()
-        } else if (lockedDigit != 0 && g.values[cell] == 0) {
-            place(g, cell, lockedDigit)
+        } else {
+            fillLocked(cell)
         }
+    }
+
+    /** In lock mode, writes the locked digit into [cell] if it is empty. */
+    private fun fillLocked(cell: Int) {
+        val g = game ?: return
+        if (generating || lockedDigit == 0 || g.values[cell] != 0) return
+        place(g, cell, lockedDigit)
     }
 
     private fun place(g: Game, cell: Int, digit: Int) {

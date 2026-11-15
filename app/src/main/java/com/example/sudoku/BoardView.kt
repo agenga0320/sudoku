@@ -8,6 +8,7 @@ import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.floor
 import kotlin.math.min
 
 class BoardView @JvmOverloads constructor(
@@ -39,6 +40,9 @@ class BoardView @JvmOverloads constructor(
 
     /** Called for every touch down on a cell, even one that is already selected. */
     var onCellTapped: ((Int) -> Unit)? = null
+
+    /** Called when a finger that is already down slides into another cell. */
+    var onCellDragged: ((Int) -> Unit)? = null
 
     private val density = resources.displayMetrics.density
     private val thick = 2.5f * density
@@ -156,18 +160,30 @@ class BoardView @JvmOverloads constructor(
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!isEnabled) return false
-        if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
-            val col = ((event.x - origin) / cellSize).toInt()
-            val row = ((event.y - origin) / cellSize).toInt()
-            if (col in 0..8 && row in 0..8) {
-                val index = row * 9 + col
-                if (index != selected) {
-                    selected = index
-                    onCellSelected?.invoke(index)
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> touchCell(event.x, event.y, isDown = true)
+            MotionEvent.ACTION_MOVE -> {
+                // A fast swipe batches several positions into one event; visit them all
+                // so that no cell along the way is skipped.
+                for (h in 0 until event.historySize) {
+                    touchCell(event.getHistoricalX(h), event.getHistoricalY(h), isDown = false)
                 }
-                if (event.action == MotionEvent.ACTION_DOWN) onCellTapped?.invoke(index)
+                touchCell(event.x, event.y, isDown = false)
             }
         }
         return true
+    }
+
+    private fun touchCell(x: Float, y: Float, isDown: Boolean) {
+        val col = floor((x - origin) / cellSize).toInt()
+        val row = floor((y - origin) / cellSize).toInt()
+        if (col !in 0..8 || row !in 0..8) return
+        val index = row * 9 + col
+        val moved = index != selected
+        if (moved) {
+            selected = index
+            onCellSelected?.invoke(index)
+        }
+        if (isDown) onCellTapped?.invoke(index) else if (moved) onCellDragged?.invoke(index)
     }
 }
