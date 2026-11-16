@@ -9,10 +9,12 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
     var elapsedSeconds = 0
 
     private val undoStack = ArrayDeque<IntArray>()
+    private val redoStack = ArrayDeque<IntArray>()
 
     val isSolved: Boolean get() = values.contentEquals(solution)
     val isFull: Boolean get() = values.none { it == 0 }
     val canUndo: Boolean get() = undoStack.isNotEmpty()
+    val canRedo: Boolean get() = redoStack.isNotEmpty()
 
     fun isGiven(i: Int) = givens[i] != 0
     fun countOf(digit: Int) = values.count { it == digit }
@@ -55,8 +57,14 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
         return true
     }
 
-    fun undo(): Boolean {
-        val state = undoStack.removeLastOrNull() ?: return false
+    fun undo() = step(undoStack, redoStack)
+
+    /** Brings back the move that the last [undo] took away. */
+    fun redo() = step(redoStack, undoStack)
+
+    private fun step(from: ArrayDeque<IntArray>, to: ArrayDeque<IntArray>): Boolean {
+        val state = from.removeLastOrNull() ?: return false
+        to.addLast(values + notes)
         state.copyInto(values, 0, 0, Sudoku.CELLS)
         state.copyInto(notes, 0, Sudoku.CELLS, 2 * Sudoku.CELLS)
         return true
@@ -65,6 +73,8 @@ class Game(val difficulty: Difficulty, val solution: IntArray, val givens: IntAr
     private fun snapshot() {
         undoStack.addLast(values + notes)
         if (undoStack.size > MAX_UNDO) undoStack.removeFirst()
+        // A new move starts a new branch, so the undone moves can no longer be redone.
+        redoStack.clear()
     }
 
     fun encode(): String = listOf(

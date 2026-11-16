@@ -37,7 +37,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
         }
     }
@@ -52,5 +52,6 @@ android {
 base.archivesName.set("Sudoku-v${android.defaultConfig.versionName}")
 
 dependencies {
+    implementation("com.anthropic:anthropic-java:3.3.0")
     testImplementation("junit:junit:4.13.2")
 }

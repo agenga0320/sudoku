@@ -4,7 +4,10 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -12,9 +15,12 @@ import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.anthropic.errors.AnthropicIoException
+import com.anthropic.errors.UnauthorizedException
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -22,9 +28,10 @@ class MainActivity : Activity() {
     private lateinit var board: BoardView
     private lateinit var txtDifficulty: TextView
     private lateinit var txtTime: TextView
-    private lateinit var btnUndo: Button
-    private lateinit var btnNotes: Button
-    private lateinit var btnLock: Button
+    private lateinit var btnUndo: ImageButton
+    private lateinit var btnRedo: ImageButton
+    private lateinit var btnNotes: ImageButton
+    private lateinit var btnLock: ImageButton
     private val numberButtons = ArrayList<Button>()
     private val numberBackgrounds = ArrayList<Drawable?>()
     private lateinit var lockedBackground: Drawable
@@ -36,6 +43,9 @@ class MainActivity : Activity() {
     private var lockMode = false
     private var lockedDigit = 0
     private var generating = false
+
+    // Bumped to discard the answer of a hint request the player cancelled.
+    private var hintRequest = 0
 
     private val handler = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
@@ -58,6 +68,7 @@ class MainActivity : Activity() {
         txtDifficulty = findViewById(R.id.txtDifficulty)
         txtTime = findViewById(R.id.txtTime)
         btnUndo = findViewById(R.id.btnUndo)
+        btnRedo = findViewById(R.id.btnRedo)
         btnNotes = findViewById(R.id.btnNotes)
         btnLock = findViewById(R.id.btnLock)
         lockedBackground = getDrawable(R.drawable.bg_locked_digit)!!
@@ -69,8 +80,13 @@ class MainActivity : Activity() {
         board.onCellDragged = { fillLocked(it) }
         findViewById<Button>(R.id.btnNew).setOnClickListener { chooseDifficulty() }
         findViewById<Button>(R.id.btnImport).setOnClickListener { showImportDialog() }
+        findViewById<Button>(R.id.btnHint).apply {
+            setOnClickListener { requestHint() }
+            setOnLongClickListener { showKeyDialog(null); true }
+        }
         btnUndo.setOnClickListener { if (game?.undo() == true) refresh() }
-        findViewById<Button>(R.id.btnErase).setOnClickListener {
+        btnRedo.setOnClickListener { if (game?.redo() == true) refresh() }
+        findViewById<View>(R.id.btnErase).setOnClickListener {
             if (board.selected >= 0 && game?.erase(board.selected) == true) refresh()
         }
         btnNotes.setOnClickListener {
@@ -139,12 +155,17 @@ class MainActivity : Activity() {
     private fun onCellTapped(cell: Int) {
         val g = game ?: return
         if (generating || !lockMode) return
-        if (g.isGiven(cell)) {
-            // Tapping one of the puzzle's own digits locks onto that digit.
-            lockedDigit = g.values[cell]
-            refresh()
-        } else {
-            fillLocked(cell)
+        val digit = g.values[cell]
+        when {
+            digit == 0 -> fillLocked(cell)
+            // A given can't be changed, and in notes mode a placed digit isn't written over,
+            // so tapping either (or any digit while none is locked) locks onto that digit.
+            g.isGiven(cell) || notesMode || lockedDigit == 0 || digit == lockedDigit -> {
+                lockedDigit = digit
+                refresh()
+            }
+            // Outside notes mode, the player's own digit is replaced by the locked one.
+            else -> place(g, cell, lockedDigit)
         }
     }
 
@@ -243,6 +264,87 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun requestHint() {
+        val g = game ?: return
+        if (generating || g.isSolved || g.isFull) return
+        val key = getPreferences(MODE_PRIVATE).getString(KEY_API, null)
+        if (key.isNullOrEmpty()) return showKeyDialog { requestHint() }
+
+        // The player may keep playing behind the dialog, so the request works on a copy.
+        val snapshot = Game(g.difficulty, g.solution, g.givens).also { g.values.copyInto(it.values) }
+        val selected = board.selected
+        val request = ++hintRequest
+        val waiting = AlertDialog.Builder(this)
+            .setMessage(R.string.hint_thinking)
+            .setNegativeButton(R.string.cancel, null)
+            .setOnDismissListener { if (request == hintRequest) hintRequest++ }
+            .show()
+        Thread {
+            val result = runCatching { Coach.ask(key, snapshot, selected) }
+            runOnUiThread {
+                if (isDestroyed || request != hintRequest) return@runOnUiThread
+                hintRequest++
+                waiting.dismiss()
+                result.onSuccess { hint -> if (hint != null) showHint(hint) else alert(getString(R.string.hint_unreliable)) }
+                    .onFailure { e ->
+                        when (e) {
+                            is UnauthorizedException -> {
+                                Toast.makeText(this, R.string.hint_error_key, Toast.LENGTH_LONG).show()
+                                showKeyDialog { requestHint() }
+                            }
+                            is AnthropicIoException -> alert(getString(R.string.hint_error_network))
+                            else -> alert(getString(R.string.hint_error, e.message ?: e.javaClass.simpleName))
+                        }
+                    }
+            }
+        }.start()
+    }
+
+    /** Shows the first hint level; "more" reveals the next one, up to the full reasoning. */
+    private fun showHint(hint: Coach.Hint) {
+        val labels = listOf(R.string.hint_level_1, R.string.hint_level_2, R.string.hint_level_3)
+        val text = { shown: Int -> (0 until shown).joinToString("\n\n") { getString(labels[it], hint.levels[it]) } }
+        var shown = 1
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.hint_title)
+            .setMessage(text(shown))
+            .setPositiveButton(R.string.hint_more, null)
+            .setNegativeButton(R.string.close, null)
+            .show()
+        // Set after show() so that asking for more does not dismiss the dialog.
+        val more = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+        more.setOnClickListener {
+            shown++
+            dialog.setMessage(text(shown))
+            if (shown == labels.size) more.visibility = View.GONE
+        }
+    }
+
+    /** Lets the player enter, change or (by saving it empty) remove their API key. */
+    private fun showKeyDialog(onSaved: (() -> Unit)?) {
+        val prefs = getPreferences(MODE_PRIVATE)
+        val view = layoutInflater.inflate(R.layout.dialog_api_key, null)
+        val input = view.findViewById<EditText>(R.id.editKey)
+        input.setText(prefs.getString(KEY_API, ""))
+        view.findViewById<Button>(R.id.btnGetKey).setOnClickListener {
+            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(CONSOLE_URL))) }
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.key_title)
+            .setView(view)
+            .setPositiveButton(R.string.key_save) { _, _ ->
+                val key = input.text.toString().trim()
+                prefs.edit().putString(KEY_API, key).apply()
+                if (key.isNotEmpty()) onSaved?.invoke()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun alert(message: String) {
+        AlertDialog.Builder(this).setMessage(message).setPositiveButton(R.string.close, null).show()
+    }
+
     private fun beginGame(g: Game) {
         game = g
         board.game = g
@@ -287,14 +389,14 @@ class MainActivity : Activity() {
         if (lockedDigit != 0 && g.countOf(lockedDigit) >= 9) lockedDigit = 0
         board.highlightDigit = lockedDigit
         board.invalidate()
-        btnLock.setText(if (lockMode) R.string.lock_on else R.string.lock_off)
-        btnLock.setTextColor(getColor(if (lockMode) R.color.accent else R.color.text_primary))
+        setToggle(btnLock, lockMode, R.drawable.ic_lock, R.drawable.ic_lock_off, R.string.lock_on, R.string.lock_off)
         txtDifficulty.text = difficultyLabel(g.difficulty)
         txtTime.text = formatTime(g.elapsedSeconds)
         btnUndo.isEnabled = g.canUndo
         btnUndo.alpha = if (g.canUndo) 1f else 0.4f
-        btnNotes.setText(if (notesMode) R.string.notes_on else R.string.notes_off)
-        btnNotes.setTextColor(getColor(if (notesMode) R.color.accent else R.color.text_primary))
+        btnRedo.isEnabled = g.canRedo
+        btnRedo.alpha = if (g.canRedo) 1f else 0.4f
+        setToggle(btnNotes, notesMode, R.drawable.ic_pencil, R.drawable.ic_pen, R.string.notes_on, R.string.notes_off)
         for ((index, button) in numberButtons.withIndex()) {
             // A digit that is already on the board nine times can't be placed again.
             val available = g.countOf(index + 1) < 9
@@ -302,6 +404,13 @@ class MainActivity : Activity() {
             button.alpha = if (available) 1f else 0.25f
             button.background = if (index + 1 == lockedDigit) lockedBackground else numberBackgrounds[index]
         }
+    }
+
+    /** Shows a mode button's on or off icon; the label is kept for screen readers. */
+    private fun setToggle(button: ImageButton, on: Boolean, iconOn: Int, iconOff: Int, labelOn: Int, labelOff: Int) {
+        button.setImageResource(if (on) iconOn else iconOff)
+        button.imageTintList = ColorStateList.valueOf(getColor(if (on) R.color.accent else R.color.text_primary))
+        button.contentDescription = getString(if (on) labelOn else labelOff)
     }
 
     private fun difficultyLabel(difficulty: Difficulty) = getString(
@@ -318,5 +427,7 @@ class MainActivity : Activity() {
 
     private companion object {
         const val KEY_GAME = "game"
+        const val KEY_API = "anthropic_api_key"
+        const val CONSOLE_URL = "https://platform.claude.com/"
     }
 }

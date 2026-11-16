@@ -209,4 +209,32 @@ class SudokuTest {
         assertNull(Game.decode("garbage"))
         assertNull(Game.decode(""))
     }
+
+    @Test
+    fun redoRestoresUndoneMovesUntilANewMove() {
+        val puzzle = Sudoku.generate(Difficulty.EASY, Random(3))
+        val game = Game(Difficulty.EASY, puzzle.solution, puzzle.givens)
+        val (a, b) = (0 until Sudoku.CELLS).filter { puzzle.givens[it] == 0 }
+        assertFalse(game.redo())
+
+        game.enter(a, puzzle.solution[a])
+        game.enter(b, puzzle.solution[b])
+        assertTrue(game.undo())
+        assertTrue(game.undo())
+        assertEquals(0, game.values[a])
+
+        assertTrue(game.redo())
+        assertEquals(puzzle.solution[a], game.values[a])
+        assertEquals(0, game.values[b])
+        assertTrue(game.canRedo)
+
+        // Undoing a redo and redoing it again both work.
+        assertTrue(game.undo())
+        assertTrue(game.redo())
+
+        // A new move discards what was left to redo.
+        game.toggleNote(b, puzzle.solution[b])
+        assertFalse(game.canRedo)
+        assertFalse(game.redo())
+    }
 }
