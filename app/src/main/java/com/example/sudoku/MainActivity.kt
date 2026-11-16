@@ -2,6 +2,7 @@ package com.example.sudoku
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -12,6 +13,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.text.format.Formatter
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -19,6 +22,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -59,6 +63,62 @@ class MainActivity : Activity() {
                 }
             }
             handler.postDelayed(this, 1000)
+        }
+    }
+
+    // Update download: ids are the download manager's, -1 meaning none.
+    private var promptedDownload = -1L
+    private var pendingInstall = -1L
+    private var progressShown = -1L
+    private var downloadDialog: AlertDialog? = null
+    private var downloadLabel: TextView? = null
+    private var downloadBar: ProgressBar? = null
+
+    /** While a download runs, updates the progress dialog every second; when it ends, offers to install. */
+    private val downloadPoll = object : Runnable {
+        override fun run() {
+            if (isDestroyed || isFinishing) return
+            try {
+                val download = UpdateDownload(this@MainActivity)
+                val id = download.id
+                val progress = download.progress(id)
+                if (progress.active) {
+                    if (progressShown != id) showDownloadProgress(id)
+                    if (downloadDialog?.isShowing == true) {
+                        val known = progress.total > 0
+                        val percent = if (known) (100 * progress.bytes / progress.total).toInt().coerceIn(0, 100) else 0
+                        downloadBar?.isIndeterminate = !known
+                        if (known) downloadBar?.progress = percent
+                        val state = getString(
+                            when (progress.status) {
+                                DownloadManager.STATUS_PENDING -> R.string.update_pending
+                                DownloadManager.STATUS_PAUSED -> R.string.update_paused
+                                else -> R.string.update_downloading
+                            }
+                        )
+                        val size = { bytes: Long -> Formatter.formatShortFileSize(this@MainActivity, maxOf(0, bytes)) }
+                        downloadLabel?.text =
+                            if (known) "$state · $percent%\n${size(progress.bytes)} / ${size(progress.total)}"
+                            else "$state\n${size(progress.bytes)}"
+                    }
+                    handler.postDelayed(this, 1000)
+                } else if (id >= 0 && id != promptedDownload) {
+                    promptedDownload = id
+                    closeDownloadProgress()
+                    when (progress.status) {
+                        DownloadManager.STATUS_SUCCESSFUL -> AlertDialog.Builder(this@MainActivity)
+                            .setTitle(R.string.update_ready_title)
+                            .setMessage(R.string.update_ready)
+                            .setPositiveButton(R.string.update_install) { _, _ -> installUpdate(id) }
+                            .setNegativeButton(R.string.update_later, null)
+                            .show()
+                        -1 -> showDownloadFailure(getString(R.string.update_missing))
+                        else -> showDownloadFailure(getString(R.string.update_failed, progress.reason))
+                    }
+                }
+            } catch (e: RuntimeException) {
+                showDownloadFailure(getString(R.string.update_error_manager))
+            }
         }
     }
 
@@ -117,11 +177,20 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         handler.postDelayed(tick, 1000)
+        progressShown = -1
+        handler.removeCallbacks(downloadPoll)
+        handler.post(downloadPoll)
+        if (pendingInstall >= 0) {
+            val id = pendingInstall
+            pendingInstall = -1
+            if (packageManager.canRequestPackageInstalls()) installUpdate(id)
+        }
     }
 
     override fun onPause() {
         super.onPause()
         handler.removeCallbacks(tick)
+        handler.removeCallbacks(downloadPoll)
         game?.let { getPreferences(MODE_PRIVATE).edit().putString(KEY_GAME, it.encode()).apply() }
     }
 
@@ -273,20 +342,124 @@ class MainActivity : Activity() {
     private fun checkForUpdate() {
         val installed = packageManager.getPackageInfo(packageName, 0).versionName ?: return
         Thread {
-            val release = Update.latest() ?: return@Thread
-            if (!Update.isNewer(release.version, installed)) return@Thread
+            val release = Update.latest(installed) ?: return@Thread
+            val prefs = getSharedPreferences("app_updates", MODE_PRIVATE)
+            if (release.version == prefs.getString(KEY_SKIPPED, "")) return@Thread
             runOnUiThread {
-                if (isDestroyed) return@runOnUiThread
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                // A download of this release that is under way or finished is handled by downloadPoll.
+                val known = runCatching {
+                    val download = UpdateDownload(this)
+                    val status = download.progress(download.id).status
+                    release.url == download.saved.url && status != -1 && status != DownloadManager.STATUS_FAILED
+                }.getOrDefault(false)
+                if (known) return@runOnUiThread
                 AlertDialog.Builder(this)
                     .setTitle(getString(R.string.update_title, release.version))
-                    .setMessage(getString(R.string.update_message, installed))
-                    .setPositiveButton(R.string.update_download) { _, _ ->
-                        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.url))) }
-                    }
+                    .setMessage(R.string.update_message)
+                    .setPositiveButton(R.string.update_download) { _, _ -> downloadUpdate(release) }
                     .setNegativeButton(R.string.update_later, null)
+                    .setNeutralButton(R.string.update_skip) { _, _ ->
+                        prefs.edit().putString(KEY_SKIPPED, release.version).apply()
+                    }
                     .show()
             }
         }.start()
+    }
+
+    private fun downloadUpdate(release: Update.Release) {
+        try {
+            val id = UpdateDownload(this).enqueue(release)
+            promptedDownload = -1
+            showDownloadProgress(id)
+            handler.removeCallbacks(downloadPoll)
+            handler.post(downloadPoll)
+        } catch (e: RuntimeException) {
+            closeDownloadProgress()
+            alert(getString(R.string.update_error_start))
+        }
+    }
+
+    private fun closeDownloadProgress() {
+        downloadDialog?.dismiss()
+        downloadDialog = null
+    }
+
+    private fun showDownloadProgress(id: Long) {
+        closeDownloadProgress()
+        progressShown = id
+        val density = resources.displayMetrics.density
+        val pad = { dp: Int -> (dp * density).toInt() }
+        val label = TextView(this).apply {
+            setText(R.string.update_preparing)
+            textSize = 16f
+        }
+        val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            isIndeterminate = true
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad(24), pad(16), pad(24), pad(8))
+            addView(label)
+            addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, pad(24)).apply { topMargin = pad(12) })
+        }
+        downloadLabel = label
+        downloadBar = bar
+        downloadDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.update_progress_title)
+            .setView(content)
+            // The system download manager carries on by itself; this only hides the dialog.
+            .setNegativeButton(R.string.update_background) { _, _ -> closeDownloadProgress() }
+            .create()
+            .apply {
+                setCanceledOnTouchOutside(false)
+                show()
+            }
+    }
+
+    private fun showDownloadFailure(message: String) {
+        closeDownloadProgress()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.update_failed_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.update_retry) { _, _ ->
+                runCatching { downloadUpdate(UpdateDownload(this).saved) }
+                    .onFailure { alert(getString(R.string.update_error_start)) }
+            }
+            .setNegativeButton(R.string.update_later, null)
+            .show()
+    }
+
+    /** Hands the downloaded APK to the system installer, asking for the permission first if needed. */
+    private fun installUpdate(id: Long) {
+        try {
+            if (!packageManager.canRequestPackageInstalls()) {
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.update_allow_title)
+                    .setMessage(R.string.update_allow)
+                    .setPositiveButton(R.string.update_settings) { _, _ ->
+                        // onResume carries on with the installation when the player comes back.
+                        pendingInstall = id
+                        runCatching {
+                            startActivity(
+                                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+                            )
+                        }.onFailure { pendingInstall = -1 }
+                    }
+                    .setNegativeButton(R.string.cancel, null)
+                    .show()
+                return
+            }
+            val uri = UpdateDownload(this).downloaded(id) ?: throw IllegalStateException()
+            startActivity(
+                Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, Update.MIME)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            )
+        } catch (e: RuntimeException) {
+            Toast.makeText(this, R.string.update_error_install, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun requestHint() {
@@ -514,6 +687,7 @@ class MainActivity : Activity() {
 
     private companion object {
         const val KEY_GAME = "game"
+        const val KEY_SKIPPED = "skipped_version"
         const val KEY_PROVIDER = "ai_provider"
 
         // Followed by the provider's name: each service keeps its own key and model.

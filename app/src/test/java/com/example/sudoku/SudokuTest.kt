@@ -219,6 +219,16 @@ class SudokuTest {
     }
 
     @Test
+    fun onlyThisProjectsReleaseApkIsTrusted() {
+        val base = "https://github.com/agenga0320/sudoku/releases/download"
+        assertTrue(Update.isTrusted("1.4.1", "$base/v1.4.1/Sudoku-v1.4.1-release.apk"))
+        assertFalse(Update.isTrusted("1.4.1", "$base/v1.4.1/Sudoku-v1.4.1-release.apk?x=1"))
+        assertFalse(Update.isTrusted("1.4.1", "$base/v1.4.0/Sudoku-v1.4.0-release.apk"))
+        assertFalse(Update.isTrusted("1.4.1", "https://example.com/v1.4.1/Sudoku-v1.4.1-release.apk"))
+        assertFalse(Update.isTrusted("1.4", "$base/v1.4/Sudoku-v1.4-release.apk"))
+    }
+
+    @Test
     fun redoRestoresUndoneMovesUntilANewMove() {
         val puzzle = Sudoku.generate(Difficulty.EASY, Random(3))
         val game = Game(Difficulty.EASY, puzzle.solution, puzzle.givens)
