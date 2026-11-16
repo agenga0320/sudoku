@@ -29,6 +29,7 @@
             android:inputType="textMultiLine|textNoSuggestions"
             android:letterSpacing="0.2"
             android:minLines="9"
+            android:textColorHint="@color/line_thin"
             android:textSize="18sp"
             android:typeface="monospace" />
 

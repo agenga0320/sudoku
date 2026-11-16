@@ -14,14 +14,34 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/key_instructions"
+            android:text="@string/key_intro"
             android:textColor="@color/text_secondary"
             android:textSize="14sp" />
+
+        <!-- The steps for getting a key stay folded away, so the fields are what the dialog shows. -->
+        <Button
+            android:id="@+id/btnKeyHow"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="-12dp"
+            android:text="@string/key_how"
+            android:textColor="@color/accent" />
+
+        <TextView
+            android:id="@+id/txtKeySteps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="@string/key_steps"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:visibility="gone" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:labelFor="@+id/spinProvider"
             android:text="@string/provider_label"
             android:textColor="@color/text_secondary"
@@ -31,6 +51,15 @@
             android:id="@+id/spinProvider"
             android:layout_width="match_parent"
             android:layout_height="48dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:labelFor="@+id/editKey"
+            android:text="@string/key_label"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
 
         <EditText
             android:id="@+id/editKey"
@@ -50,11 +79,19 @@
             android:text="@string/key_get"
             android:textColor="@color/accent" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:labelFor="@+id/editModel"
+            android:text="@string/model_label"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
         <EditText
             android:id="@+id/editModel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/model_hint"
             android:importantForAutofill="no"
             android:inputType="textNoSuggestions"
             android:singleLine="true" />

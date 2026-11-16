@@ -48,7 +48,7 @@ class CoachTest {
         val digit = Coach.candidates(g.values, empty).first()
         assertTrue(g.toggleNote(empty, digit))
         val name = "r${empty / 9 + 1}c${empty % 9 + 1}"
-        assertTrue(Coach.describe(g, -1).substringAfter("筆記").contains("$name: $digit\n"))
+        assertTrue(Coach.describe(g, -1).substringAfter("筆記").contains("$name{$digit}"))
     }
 
     @Test
@@ -66,6 +66,9 @@ class CoachTest {
         val candidates = Coach.candidates(game.values, empty)
         assertTrue(game.solution[empty] in candidates)
         assertTrue(candidates.none { d -> Sudoku.peers[empty].any { game.values[it] == d } })
-        assertTrue(Coach.describe(game, empty).contains("r${empty / 9 + 1}c${empty % 9 + 1}:"))
+        // The board is nine lines, and the empty cell shows its candidates in braces.
+        val described = Coach.describe(game, -1)
+        assertEquals(9, described.lines().count { it.matches(Regex("""r[1-9]: .+""")) })
+        assertTrue(described.contains("{${candidates.joinToString("")}}"))
     }
 }

@@ -82,8 +82,12 @@
     <string name="hint_error_network">無法連線，請檢查網路後再試。</string>
     <string name="hint_error">AI 服務回覆錯誤：\n%1$s\n\n常見原因：帳戶額度不足，或模型名稱不存在（可在設定裡按「從清單選擇模型」）。</string>
     <string name="key_title">設定 AI 服務</string>
-    <string name="key_instructions">提示功能使用你自己的 API 金鑰，費用依用量從你在該服務的帳戶扣除。\n\n1. 選擇要用的 AI 服務。\n2. 按「開啟取得金鑰的網頁」，註冊或登入後建立 API 金鑰並複製（多數只會完整顯示一次）。\n3. 多數服務要先儲值才能用；聊天用的訂閱（Claude Pro、ChatGPT Plus 等）不含 API 額度。\n4. 貼到下面。\n\n金鑰只存在這支手機上，每個服務各存一把。長按「向AI提問」可以重新選擇取得提示的方式，選「API 金鑰」就會回到這裡；清空後儲存即刪除。</string>
-    <string name="key_hint">API 金鑰</string>
+    <string name="key_intro">「向AI提問」會用你自己的 API 金鑰，費用依用量從你在該服務的帳戶扣除。金鑰只存在這支手機上。</string>
+    <string name="key_how">怎麼取得金鑰？</string>
+    <string name="key_steps">1. 在下面選擇要用的 AI 服務。\n2. 按「開啟取得金鑰的網頁」，註冊或登入後建立 API 金鑰並複製（多數只會完整顯示一次）。\n3. 多數服務要先儲值才能用；聊天用的訂閱（Claude Pro、ChatGPT Plus 等）不含 API 額度。\n4. 把金鑰貼到「API 金鑰」欄位後儲存。\n\n每個服務各存一把金鑰；清空後儲存即刪除。之後要回到這裡，長按「向AI提問」再選「改用 API 金鑰…」。</string>
+    <string name="key_label">API 金鑰</string>
+    <string name="model_label">模型名稱</string>
+    <string name="key_hint">貼上金鑰</string>
     <string name="key_get">開啟取得金鑰的網頁</string>
     <string name="key_save">儲存</string>
     <string name="provider_label">AI 服務</string>

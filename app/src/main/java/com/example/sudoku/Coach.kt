@@ -61,7 +61,7 @@ object Coach {
 
     private val SYSTEM_PROMPT = """
         你是數獨教練，任務是教玩家「怎麼想」，不是告訴答案。
-        座標說明：r 是由上往下數的第幾橫排，c 是由左往右數的第幾直行，例如 r2c5 是第 2 橫排第 5 直行。
+        座標說明：r 是由上往下數的第幾橫排，c 是由左往右數的第幾直行，例如 r2c5 是第 2 橫排第 5 直行。盤面每排的第幾個項目就是第幾直行。
         九宮格由左上到右下編號 1 到 9。跟玩家說明時請用「第 N 橫排」「第 N 直行」「第 N 宮」，不要用 r、c 代號。
 
         找出盤面上「下一個能靠邏輯確定」的格子，選最簡單、最容易看出來的那一個。
@@ -78,12 +78,11 @@ object Coach {
     // For a chat website the player talks to the AI directly, so the hints come one at a time
     // on request instead of in a fixed format, and nothing can be checked against the solution.
     private val CHAT_PROMPT = """
-        你是數獨教練，請教我「怎麼想」，不要告訴我答案。
-        座標：r 是由上往下第幾橫排，c 是由左往右第幾直行；九宮格由左上到右下編號 1 到 9。回答時請說「第 N 橫排、第 N 直行、第 N 宮」。
-        請找出下一個能靠邏輯確定的格子，選最容易看出來的。只根據下面的候選數字推理，不確定就說不確定。
-        第一次回答請用兩三句話，包含兩件事：先說你是參考盤面上的什麼線索（例如哪一排已經快填滿、哪個數字在哪幾個宮已經出現、哪些格子的候選數字特別少），再說因此該把注意力放在哪一橫排、直行或宮。這時先不要講用什麼技巧，也不要提該填的數字。
-        我說「再多一點」時，再告訴我用什麼技巧；我再說一次，才一步步帶我推理。任何時候都不要直接說出該填的數字，除非我明確要求。
-        請用繁體中文回答。
+        你是數獨教練，請用繁體中文教我「怎麼想」，不要告訴我答案。
+        r 是由上往下第幾橫排，九宮格由左上到右下編號 1 到 9；回答時請說「第 N 橫排、第 N 直行、第 N 宮」。
+        請找出下一個能靠邏輯確定的格子，選最容易看出來的，只根據下面的候選數字推理。
+        第一次回答用兩三句話：先說你參考了盤面上的什麼線索，再說因此該看哪一橫排、直行或宮；先不講技巧，也不提該填的數字。
+        我說「再多一點」再講技巧，再說一次才一步步帶我推理。除非我明確要求，不要說出該填的數字。
     """.trimIndent()
 
     /** What to ask on a chat website: the coaching request followed by the board. */
@@ -93,33 +92,32 @@ object Coach {
     fun candidates(values: IntArray, i: Int): List<Int> =
         if (values[i] != 0) emptyList() else (1..9).filter { d -> Sudoku.peers[i].none { values[it] == d } }
 
-    /** The board as the model sees it: the grid, then the candidates of every empty cell. */
+    /**
+     * The board as the model sees it: nine lines, one per row, with each empty cell shown as
+     * its candidates. Kept short because on a chat website the player sees it as their own
+     * message and has to scroll past it to reach the answer.
+     */
     fun describe(game: Game, selected: Int): String = buildString {
-        appendLine("盤面（. 是空格，[ ] 內是玩家填的數字，其餘是題目給的）：")
+        appendLine("盤面，每排由左到右是第 1 到第 9 直行。單一數字是題目給的，[5] 是玩家填的，{247} 是空格和它的候選數字：")
         for (r in 0 until 9) {
             val row = (0 until 9).joinToString(" ") { c ->
                 val i = r * 9 + c
                 val v = game.values[i]
                 when {
-                    v == 0 -> "."
+                    v == 0 -> "{${candidates(game.values, i).joinToString("")}}"
                     game.isGiven(i) -> "$v"
                     else -> "[$v]"
                 }
             }
             appendLine("r${r + 1}: $row")
         }
-        appendLine()
-        appendLine("每個空格的候選數字：")
-        for (i in 0 until Sudoku.CELLS) {
-            if (game.values[i] == 0) appendLine("${cellName(i)}: ${candidates(game.values, i).joinToString(" ")}")
-        }
         val noted = (0 until Sudoku.CELLS).filter { game.values[it] == 0 && game.notes[it] != 0 }
         if (noted.isNotEmpty()) {
             appendLine()
-            appendLine("玩家自己在空格裡做的筆記（玩家目前認為可能的數字，不一定正確或完整；可以用來了解玩家想到哪裡）：")
-            for (i in noted) {
-                appendLine("${cellName(i)}: ${(1..9).filter { game.notes[i] and (1 shl it) != 0 }.joinToString(" ")}")
-            }
+            appendLine("玩家自己做的筆記（玩家目前認為可能的數字，不一定正確或完整）：")
+            appendLine(noted.joinToString(" ") { i ->
+                "${cellName(i)}{${(1..9).filter { game.notes[i] and (1 shl it) != 0 }.joinToString("")}}"
+            })
         }
         if (selected >= 0 && game.values[selected] == 0) {
             appendLine()

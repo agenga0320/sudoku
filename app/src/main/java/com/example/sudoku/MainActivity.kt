@@ -733,6 +733,10 @@ class MainActivity : Activity() {
             runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(typed().provider.keyUrl))) }
         }
         view.findViewById<Button>(R.id.btnPickModel).setOnClickListener { pickModel(typed(), inputModel) }
+        val steps = view.findViewById<View>(R.id.txtKeySteps)
+        view.findViewById<Button>(R.id.btnKeyHow).setOnClickListener {
+            steps.visibility = if (steps.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
 
         AlertDialog.Builder(this)
             .setTitle(R.string.key_title)
