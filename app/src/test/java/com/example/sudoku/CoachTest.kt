@@ -42,6 +42,16 @@ class CoachTest {
     }
 
     @Test
+    fun playersNotesAreDescribedOnlyWhenThereAreSome() {
+        val g = Game(Difficulty.EASY, game.solution, game.givens)
+        assertFalse(Coach.describe(g, -1).contains("筆記"))
+        val digit = Coach.candidates(g.values, empty).first()
+        assertTrue(g.toggleNote(empty, digit))
+        val name = "r${empty / 9 + 1}c${empty % 9 + 1}"
+        assertTrue(Coach.describe(g, -1).substringAfter("筆記").contains("$name: $digit\n"))
+    }
+
+    @Test
     fun chatLinkCarriesTheQuestionOnlyWhereTheSiteTakesIt() {
         val question = Coach.chatPrompt(game, empty)
         assertTrue(question.contains("r1: "))

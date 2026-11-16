@@ -3,6 +3,7 @@
     <color name="accent">#82B1FF</color>
     <color name="text_primary">#E6E8EB</color>
     <color name="text_secondary">#9AA3AE</color>
+    <color name="accent_soft">#2A2D33</color>
 
     <color name="board_bg">#1E1F22</color>
     <color name="cell_selected">#3A5A80</color>

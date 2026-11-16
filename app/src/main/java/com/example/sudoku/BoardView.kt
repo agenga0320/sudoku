@@ -161,7 +161,11 @@ class BoardView @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!isEnabled) return false
         when (event.action) {
-            MotionEvent.ACTION_DOWN -> touchCell(event.x, event.y, isDown = true)
+            MotionEvent.ACTION_DOWN -> {
+                // Sliding over the board fills cells; it must not scroll the screen instead.
+                parent.requestDisallowInterceptTouchEvent(true)
+                touchCell(event.x, event.y, isDown = true)
+            }
             MotionEvent.ACTION_MOVE -> {
                 // A fast swipe batches several positions into one event; visit them all
                 // so that no cell along the way is skipped.

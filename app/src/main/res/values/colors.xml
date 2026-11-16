@@ -2,7 +2,8 @@
     <color name="app_bg">#F5F7FA</color>
     <color name="accent">#1565C0</color>
     <color name="text_primary">#1B1F24</color>
-    <color name="text_secondary">#6B7480</color>
+    <color name="text_secondary">#5F6873</color>
+    <color name="accent_soft">#E8EEF7</color>
 
     <color name="board_bg">#FFFFFF</color>
     <color name="cell_selected">#BBDEFB</color>

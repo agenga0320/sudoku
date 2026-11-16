@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- The whole screen scrolls: the game on top, and the AI chat below it once it is opened. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/pageScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true"
+    android:fillViewport="true"
+    android:fitsSystemWindows="true">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="16dp">
 
@@ -21,37 +28,18 @@
             android:textSize="28sp"
             android:textStyle="bold" />
 
-        <Button
-            android:id="@+id/btnHint"
+        <ImageButton
+            android:id="@+id/btnGame"
             style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
-            android:text="@string/hint"
-            android:textColor="@color/accent"
-            android:textSize="16sp" />
-
-        <Button
-            android:id="@+id/btnImport"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
-            android:text="@string/import_puzzle"
-            android:textColor="@color/accent"
-            android:textSize="16sp" />
-
-        <Button
-            android:id="@+id/btnNew"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/new_game"
-            android:textColor="@color/accent"
-            android:textSize="16sp" />
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="@string/game_menu"
+            android:src="@drawable/ic_restart"
+            android:tint="@color/accent" />
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/rowInfo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
@@ -82,6 +70,7 @@
         android:layout_height="wrap_content" />
 
     <LinearLayout
+        android:id="@+id/rowTools"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
@@ -95,7 +84,7 @@
             android:layout_weight="1"
             android:contentDescription="@string/undo"
             android:src="@drawable/ic_undo"
-            android:tint="@color/text_primary" />
+            android:tint="@color/text_secondary" />
 
         <ImageButton
             android:id="@+id/btnRedo"
@@ -105,7 +94,7 @@
             android:layout_weight="1"
             android:contentDescription="@string/redo"
             android:src="@drawable/ic_redo"
-            android:tint="@color/text_primary" />
+            android:tint="@color/text_secondary" />
 
         <ImageButton
             android:id="@+id/btnErase"
@@ -115,7 +104,7 @@
             android:layout_weight="1"
             android:contentDescription="@string/erase"
             android:src="@drawable/ic_eraser"
-            android:tint="@color/text_primary" />
+            android:tint="@color/text_secondary" />
 
         <ImageButton
             android:id="@+id/btnNotes"
@@ -125,7 +114,7 @@
             android:layout_weight="1"
             android:contentDescription="@string/notes_off"
             android:src="@drawable/ic_pen"
-            android:tint="@color/text_primary" />
+            android:tint="@color/text_secondary" />
 
         <ImageButton
             android:id="@+id/btnLock"
@@ -135,7 +124,7 @@
             android:layout_weight="1"
             android:contentDescription="@string/lock_off"
             android:src="@drawable/ic_lock_off"
-            android:tint="@color/text_primary" />
+            android:tint="@color/text_secondary" />
     </LinearLayout>
 
     <LinearLayout
@@ -145,4 +134,82 @@
         android:layout_marginTop="8dp"
         android:orientation="horizontal" />
 
+    <Button
+        android:id="@+id/btnHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:backgroundTint="@color/accent_soft"
+        android:stateListAnimator="@null"
+        android:text="@string/hint"
+        android:textColor="@color/accent"
+        android:textSize="16sp" />
+
+    <!-- The AI chat website, shown under the number pad; the web view is added when first needed. -->
+    <!-- Its height is set in code to that of the screen, so that scrolled to, it fills the view. -->
+    <LinearLayout
+        android:id="@+id/chatPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/txtChatSite"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/text_secondary"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/btnChatBrowser"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:text="@string/chat_browser"
+                android:textColor="@color/text_secondary" />
+
+            <Button
+                android:id="@+id/btnChatTop"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:text="@string/chat_to_board"
+                android:textColor="@color/accent" />
+
+            <Button
+                android:id="@+id/btnChatClose"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:text="@string/close"
+                android:textColor="@color/text_secondary" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/chatProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:max="100" />
+
+        <FrameLayout
+            android:id="@+id/chatWeb"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
 </LinearLayout>
+</ScrollView>

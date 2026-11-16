@@ -17,13 +17,19 @@ import android.os.Looper
 import android.provider.Settings
 import android.text.format.Formatter
 import android.view.View
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -66,6 +72,15 @@ class MainActivity : Activity() {
             handler.postDelayed(this, 1000)
         }
     }
+
+    // The AI chat website under the number pad.
+    private lateinit var chatPanel: View
+    private lateinit var chatProgress: ProgressBar
+    private lateinit var txtChatSite: TextView
+    private var chatWeb: WebView? = null
+    private var chatSite: ChatSite? = null
+    private var chatQuestion = ""
+    private lateinit var pageScroll: ScrollView
 
     // Update download: ids are the download manager's, -1 meaning none.
     private var promptedDownload = -1L
@@ -141,12 +156,18 @@ class MainActivity : Activity() {
         board.onCellTapped = { onCellTapped(it) }
         // Sliding across the board keeps writing the locked digit into the empty cells it passes.
         board.onCellDragged = { fillLocked(it) }
-        findViewById<Button>(R.id.btnNew).setOnClickListener { chooseDifficulty() }
-        findViewById<Button>(R.id.btnImport).setOnClickListener { showImportDialog() }
+        findViewById<View>(R.id.btnGame).setOnClickListener { showGameMenu() }
         findViewById<Button>(R.id.btnHint).apply {
             setOnClickListener { requestHint() }
             setOnLongClickListener { chooseHintMode(null); true }
         }
+        chatPanel = findViewById(R.id.chatPanel)
+        chatProgress = findViewById(R.id.chatProgress)
+        txtChatSite = findViewById(R.id.txtChatSite)
+        findViewById<Button>(R.id.btnChatBrowser).setOnClickListener { openChatInBrowser() }
+        pageScroll = findViewById(R.id.pageScroll)
+        findViewById<Button>(R.id.btnChatTop).setOnClickListener { pageScroll.smoothScrollTo(0, 0) }
+        findViewById<Button>(R.id.btnChatClose).setOnClickListener { closeChat() }
         btnUndo.setOnClickListener { if (game?.undo() == true) refresh() }
         btnRedo.setOnClickListener { if (game?.redo() == true) refresh() }
         findViewById<View>(R.id.btnErase).setOnClickListener {
@@ -173,6 +194,22 @@ class MainActivity : Activity() {
         } else {
             startNewGame(Difficulty.MEDIUM)
         }
+    }
+
+    /** Back steps back inside the chat page, then closes the chat, before leaving the app. */
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        val web = chatWeb
+        when {
+            chatPanel.visibility != View.VISIBLE -> super.onBackPressed()
+            web != null && web.canGoBack() -> web.goBack()
+            else -> closeChat()
+        }
+    }
+
+    override fun onDestroy() {
+        chatWeb?.destroy()
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -261,6 +298,33 @@ class MainActivity : Activity() {
             // Mistakes are never pointed out while playing, so say so once nothing is left to fill.
             Toast.makeText(this, R.string.full_but_wrong, Toast.LENGTH_LONG).show()
         }
+    }
+
+    /** Start the same puzzle over, start a new one, or import one. */
+    private fun showGameMenu() {
+        if (generating) return
+        val labels = arrayOf(getString(R.string.restart), getString(R.string.new_game), getString(R.string.import_puzzle))
+        AlertDialog.Builder(this)
+            .setItems(labels) { _, which ->
+                when (which) {
+                    // Same puzzle, with the player's digits, notes and time cleared.
+                    0 -> confirmRestart()
+                    1 -> chooseDifficulty()
+                    else -> showImportDialog()
+                }
+            }
+            .show()
+    }
+
+    /** Restarting can't be undone, so it says what will be lost and asks first. */
+    private fun confirmRestart() {
+        val g = game ?: return
+        AlertDialog.Builder(this)
+            .setTitle(R.string.restart_title)
+            .setMessage(R.string.restart_message)
+            .setPositiveButton(R.string.restart) { _, _ -> beginGame(Game(g.difficulty, g.solution, g.givens)) }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun chooseDifficulty() {
@@ -479,7 +543,7 @@ class MainActivity : Activity() {
      */
     private fun chooseHintMode(then: (() -> Unit)?) {
         val sites = ChatSite.values()
-        val labels = sites.map { getString(R.string.hint_mode_account, it.label) } + getString(R.string.hint_mode_api)
+        val labels = sites.map { it.label } + getString(R.string.hint_mode_api)
         AlertDialog.Builder(this)
             .setTitle(R.string.hint_mode_title)
             .setItems(labels.toTypedArray()) { _, which ->
@@ -492,16 +556,72 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Slides the chat website up over the game as a browser custom tab, which shares the
-     * browser's sign-ins; Back returns to the board. The question is also copied, for sites
-     * that don't take it from the address or when it doesn't arrive.
+     * Shows the chat website under the number pad, asking about the current board. The app
+     * only displays the page: the player types into the site itself. The question is also
+     * copied, for sites that don't take it from the address or when it doesn't arrive.
      */
     private fun openChat(site: ChatSite, g: Game) {
         val question = Coach.chatPrompt(g, board.selected)
         getSystemService(ClipboardManager::class.java)
             .setPrimaryClip(ClipData.newPlainText(getString(R.string.hint), question))
         Toast.makeText(this, R.string.chat_copied, Toast.LENGTH_LONG).show()
+        chatSite = site
+        chatQuestion = question
 
+        // Created on first use: a web view is too heavy to load with every start of the app.
+        val web = chatWeb ?: WebView(this).also {
+            it.settings.javaScriptEnabled = true
+            it.settings.domStorageEnabled = true
+            CookieManager.getInstance().setAcceptThirdPartyCookies(it, true)
+            // Without a client, following a link would leave for the browser.
+            it.webViewClient = WebViewClient()
+            // The page stays blank for a while as it loads, so say so and show how far it is.
+            it.webChromeClient = object : WebChromeClient() {
+                override fun onProgressChanged(view: WebView, progress: Int) {
+                    val loading = progress < 100
+                    val name = chatSite?.label.orEmpty()
+                    chatProgress.progress = progress
+                    chatProgress.visibility = if (loading) View.VISIBLE else View.INVISIBLE
+                    txtChatSite.text = if (loading) getString(R.string.chat_loading, name) else name
+                }
+            }
+            // Drags inside the page scroll the conversation; the screen itself is scrolled
+            // from anywhere outside it, such as the row of buttons above.
+            it.setOnTouchListener { view, _ ->
+                view.parent.requestDisallowInterceptTouchEvent(true)
+                false
+            }
+            findViewById<FrameLayout>(R.id.chatWeb).addView(it)
+            chatWeb = it
+        }
+        txtChatSite.text = getString(R.string.chat_loading, site.label)
+        chatProgress.progress = 0
+        chatProgress.visibility = View.VISIBLE
+        // Sized so that, scrolled to, the ask button and the chat together fill the screen. The
+        // button stays in view as a place to drag the screen from, since drags on the page don't.
+        val margin = (16 * resources.displayMetrics.density).toInt()
+        val ask = findViewById<View>(R.id.btnHint)
+        chatPanel.layoutParams = chatPanel.layoutParams.apply {
+            height = pageScroll.height - 3 * margin - ask.height
+        }
+        chatPanel.visibility = View.VISIBLE
+        pageScroll.post { pageScroll.smoothScrollTo(0, ask.top - margin) }
+        web.loadUrl(site.link(question))
+    }
+
+    private fun closeChat() {
+        chatPanel.visibility = View.GONE
+        pageScroll.scrollTo(0, 0)
+        chatWeb?.loadUrl("about:blank")
+    }
+
+    /**
+     * Opens the same question as a browser custom tab over the game instead. Unlike the
+     * embedded page it shares the browser's sign-ins, which sites that sign in with Google need.
+     */
+    private fun openChatInBrowser() {
+        val site = chatSite ?: return
+        val question = chatQuestion
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(site.link(question)))
         // This extra is what makes a browser open the page as a custom tab instead of a full window.
         intent.putExtras(Bundle().apply { putBinder("android.support.customtabs.extra.SESSION", null) })
@@ -720,7 +840,7 @@ class MainActivity : Activity() {
     /** Shows a mode button's on or off icon; the label is kept for screen readers. */
     private fun setToggle(button: ImageButton, on: Boolean, iconOn: Int, iconOff: Int, labelOn: Int, labelOff: Int) {
         button.setImageResource(if (on) iconOn else iconOff)
-        button.imageTintList = ColorStateList.valueOf(getColor(if (on) R.color.accent else R.color.text_primary))
+        button.imageTintList = ColorStateList.valueOf(getColor(if (on) R.color.accent else R.color.text_secondary))
         button.contentDescription = getString(if (on) labelOn else labelOff)
     }
 

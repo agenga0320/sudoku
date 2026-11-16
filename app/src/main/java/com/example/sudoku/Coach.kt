@@ -35,7 +35,7 @@ enum class ChatSite(val label: String, val url: String, val prefill: Boolean) {
     GROK("Grok", "https://grok.com/?q=", true),
     COPILOT("Copilot", "https://copilot.microsoft.com/?q=", true),
     DEEPSEEK("DeepSeek", "https://chat.deepseek.com/", false),
-    MISTRAL("Le Chat (Mistral)", "https://chat.mistral.ai/chat?q=", true);
+    MISTRAL("Le Chat", "https://chat.mistral.ai/chat?q=", true);
 
     /** The address that opens this site with [question] asked, or just the site if it can't prefill. */
     fun link(question: String) =
@@ -69,7 +69,7 @@ object Coach {
         任何說明裡都不可以說出任何格子該填的數字。
 
         嚴格依照下列格式回答，用繁體中文，不要加其他內容：
-        [1] 一句話，只說該看哪一橫排、直行或宮。
+        [1] 兩三句話：先說參考了盤面上的什麼線索（例如哪一排快填滿、哪個數字在哪幾個宮已經出現、哪些格子候選數字特別少），再說因此該看哪一橫排、直行或宮。不提技巧名稱，也不提該填的數字。
         [2] 一兩句話，說要用什麼觀察角度或技巧，不提該填的數字。
         [3] 一步步帶玩家推理，直到可以確定某一格，但最後一步留給玩家自己完成，不要說出答案。
         [CHECK] r<橫排>c<直行>=<數字>（這一行玩家看不到，只給程式檢查你的推理用）
@@ -81,7 +81,8 @@ object Coach {
         你是數獨教練，請教我「怎麼想」，不要告訴我答案。
         座標：r 是由上往下第幾橫排，c 是由左往右第幾直行；九宮格由左上到右下編號 1 到 9。回答時請說「第 N 橫排、第 N 直行、第 N 宮」。
         請找出下一個能靠邏輯確定的格子，選最容易看出來的。只根據下面的候選數字推理，不確定就說不確定。
-        先只告訴我該看哪一橫排、直行或宮。我說「再多一點」時，再告訴我用什麼技巧；我再說一次，才一步步帶我推理。任何時候都不要直接說出該填的數字，除非我明確要求。
+        第一次回答請用兩三句話，包含兩件事：先說你是參考盤面上的什麼線索（例如哪一排已經快填滿、哪個數字在哪幾個宮已經出現、哪些格子的候選數字特別少），再說因此該把注意力放在哪一橫排、直行或宮。這時先不要講用什麼技巧，也不要提該填的數字。
+        我說「再多一點」時，再告訴我用什麼技巧；我再說一次，才一步步帶我推理。任何時候都不要直接說出該填的數字，除非我明確要求。
         請用繁體中文回答。
     """.trimIndent()
 
@@ -111,6 +112,14 @@ object Coach {
         appendLine("每個空格的候選數字：")
         for (i in 0 until Sudoku.CELLS) {
             if (game.values[i] == 0) appendLine("${cellName(i)}: ${candidates(game.values, i).joinToString(" ")}")
+        }
+        val noted = (0 until Sudoku.CELLS).filter { game.values[it] == 0 && game.notes[it] != 0 }
+        if (noted.isNotEmpty()) {
+            appendLine()
+            appendLine("玩家自己在空格裡做的筆記（玩家目前認為可能的數字，不一定正確或完整；可以用來了解玩家想到哪裡）：")
+            for (i in noted) {
+                appendLine("${cellName(i)}: ${(1..9).filter { game.notes[i] and (1 shl it) != 0 }.joinToString(" ")}")
+            }
         }
         if (selected >= 0 && game.values[selected] == 0) {
             appendLine()
