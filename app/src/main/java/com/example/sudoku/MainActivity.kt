@@ -13,14 +13,16 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
-import com.anthropic.errors.AnthropicIoException
-import com.anthropic.errors.UnauthorizedException
+import java.io.IOException
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -98,6 +100,9 @@ class MainActivity : Activity() {
             lockedDigit = 0
             refresh()
         }
+
+        // Only on a fresh start, not when the activity is recreated.
+        if (savedInstanceState == null) checkForUpdate()
 
         val saved = getPreferences(MODE_PRIVATE).getString(KEY_GAME, null)?.let(Game::decode)
         if (saved != null) {
@@ -264,11 +269,31 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Looks for a newer release in the background; stays silent when offline or up to date. */
+    private fun checkForUpdate() {
+        val installed = packageManager.getPackageInfo(packageName, 0).versionName ?: return
+        Thread {
+            val release = Update.latest() ?: return@Thread
+            if (!Update.isNewer(release.version, installed)) return@Thread
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.update_title, release.version))
+                    .setMessage(getString(R.string.update_message, installed))
+                    .setPositiveButton(R.string.update_download) { _, _ ->
+                        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.url))) }
+                    }
+                    .setNegativeButton(R.string.update_later, null)
+                    .show()
+            }
+        }.start()
+    }
+
     private fun requestHint() {
         val g = game ?: return
         if (generating || g.isSolved || g.isFull) return
-        val key = getPreferences(MODE_PRIVATE).getString(KEY_API, null)
-        if (key.isNullOrEmpty()) return showKeyDialog { requestHint() }
+        val service = savedService(savedProvider())
+        if (service.apiKey.isEmpty()) return showKeyDialog { requestHint() }
 
         // The player may keep playing behind the dialog, so the request works on a copy.
         val snapshot = Game(g.difficulty, g.solution, g.givens).also { g.values.copyInto(it.values) }
@@ -280,24 +305,39 @@ class MainActivity : Activity() {
             .setOnDismissListener { if (request == hintRequest) hintRequest++ }
             .show()
         Thread {
-            val result = runCatching { Coach.ask(key, snapshot, selected) }
+            val result = runCatching { Coach.ask(service, snapshot, selected) }
             runOnUiThread {
                 if (isDestroyed || request != hintRequest) return@runOnUiThread
                 hintRequest++
                 waiting.dismiss()
                 result.onSuccess { hint -> if (hint != null) showHint(hint) else alert(getString(R.string.hint_unreliable)) }
                     .onFailure { e ->
-                        when (e) {
-                            is UnauthorizedException -> {
-                                Toast.makeText(this, R.string.hint_error_key, Toast.LENGTH_LONG).show()
-                                showKeyDialog { requestHint() }
-                            }
-                            is AnthropicIoException -> alert(getString(R.string.hint_error_network))
-                            else -> alert(getString(R.string.hint_error, e.message ?: e.javaClass.simpleName))
-                        }
+                        showAiError(e)
+                        if (e is Coach.BadKeyException) showKeyDialog { requestHint() }
                     }
             }
         }.start()
+    }
+
+    private fun showAiError(e: Throwable) = when (e) {
+        is Coach.BadKeyException -> Toast.makeText(this, R.string.hint_error_key, Toast.LENGTH_LONG).show()
+        is IOException -> alert(getString(R.string.hint_error_network))
+        else -> alert(getString(R.string.hint_error, e.message ?: e.javaClass.simpleName))
+    }
+
+    private fun savedProvider(): Provider {
+        val name = getPreferences(MODE_PRIVATE).getString(KEY_PROVIDER, null)
+        return Provider.values().firstOrNull { it.name == name } ?: Provider.CLAUDE
+    }
+
+    /** The key and model the player saved for [provider]; the key is empty if there is none. */
+    private fun savedService(provider: Provider): Coach.Service {
+        val prefs = getPreferences(MODE_PRIVATE)
+        return Coach.Service(
+            provider,
+            prefs.getString(KEY_API + provider.name, "").orEmpty(),
+            prefs.getString(KEY_MODEL + provider.name, null) ?: provider.defaultModel,
+        )
     }
 
     /** Shows the first hint level; "more" reveals the next one, up to the full reasoning. */
@@ -320,25 +360,72 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Lets the player enter, change or (by saving it empty) remove their API key. */
+    /**
+     * Lets the player choose the AI service and enter its API key and model.
+     * Each service keeps its own key and model; saving an empty key removes it.
+     */
     private fun showKeyDialog(onSaved: (() -> Unit)?) {
-        val prefs = getPreferences(MODE_PRIVATE)
         val view = layoutInflater.inflate(R.layout.dialog_api_key, null)
-        val input = view.findViewById<EditText>(R.id.editKey)
-        input.setText(prefs.getString(KEY_API, ""))
-        view.findViewById<Button>(R.id.btnGetKey).setOnClickListener {
-            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(CONSOLE_URL))) }
+        val spinner = view.findViewById<Spinner>(R.id.spinProvider)
+        val inputKey = view.findViewById<EditText>(R.id.editKey)
+        val inputModel = view.findViewById<EditText>(R.id.editModel)
+        val providers = Provider.values()
+        val typed = { Coach.Service(providers[spinner.selectedItemPosition], inputKey.text.toString().trim(), inputModel.text.toString().trim()) }
+
+        spinner.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, providers.map { it.label })
+        spinner.setSelection(savedProvider().ordinal)
+        // Also runs once for the initial selection, which fills in the fields.
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, item: View?, position: Int, id: Long) {
+                val saved = savedService(providers[position])
+                inputKey.setText(saved.apiKey)
+                inputModel.setText(saved.model)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
+        view.findViewById<Button>(R.id.btnGetKey).setOnClickListener {
+            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(typed().provider.keyUrl))) }
+        }
+        view.findViewById<Button>(R.id.btnPickModel).setOnClickListener { pickModel(typed(), inputModel) }
+
         AlertDialog.Builder(this)
             .setTitle(R.string.key_title)
             .setView(view)
             .setPositiveButton(R.string.key_save) { _, _ ->
-                val key = input.text.toString().trim()
-                prefs.edit().putString(KEY_API, key).apply()
-                if (key.isNotEmpty()) onSaved?.invoke()
+                val service = typed()
+                val name = service.provider.name
+                getPreferences(MODE_PRIVATE).edit()
+                    .putString(KEY_PROVIDER, name)
+                    .putString(KEY_API + name, service.apiKey)
+                    .putString(KEY_MODEL + name, service.model.ifEmpty { service.provider.defaultModel })
+                    .apply()
+                if (service.apiKey.isNotEmpty()) onSaved?.invoke()
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    /** Asks the service which models the typed key can use and puts the chosen one in [into]. */
+    private fun pickModel(service: Coach.Service, into: EditText) {
+        if (service.apiKey.isEmpty()) {
+            Toast.makeText(this, R.string.key_needed, Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, R.string.models_loading, Toast.LENGTH_SHORT).show()
+        Thread {
+            val result = runCatching { Coach.models(service) }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                result.onSuccess { models ->
+                    AlertDialog.Builder(this)
+                        .setTitle(R.string.model_pick)
+                        .setItems(models.toTypedArray()) { _, which -> into.setText(models[which]) }
+                        .show()
+                }.onFailure(::showAiError)
+            }
+        }.start()
     }
 
     private fun alert(message: String) {
@@ -427,7 +514,10 @@ class MainActivity : Activity() {
 
     private companion object {
         const val KEY_GAME = "game"
-        const val KEY_API = "anthropic_api_key"
-        const val CONSOLE_URL = "https://platform.claude.com/"
+        const val KEY_PROVIDER = "ai_provider"
+
+        // Followed by the provider's name: each service keeps its own key and model.
+        const val KEY_API = "ai_key_"
+        const val KEY_MODEL = "ai_model_"
     }
 }

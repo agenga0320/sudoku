@@ -211,6 +211,14 @@ class SudokuTest {
     }
 
     @Test
+    fun updateVersionsCompareAsNumbers() {
+        assertTrue(Update.isNewer("1.10.0", "1.9.3"))
+        assertTrue(Update.isNewer("1.4.1", "1.4"))
+        assertFalse(Update.isNewer("1.4.0", "1.4.0"))
+        assertFalse(Update.isNewer("1.3.9", "1.4.0"))
+    }
+
+    @Test
     fun redoRestoresUndoneMovesUntilANewMove() {
         val puzzle = Sudoku.generate(Difficulty.EASY, Random(3))
         val game = Game(Difficulty.EASY, puzzle.solution, puzzle.givens)

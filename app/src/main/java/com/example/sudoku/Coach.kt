@@ -1,19 +1,45 @@
 package com.example.sudoku
 
-import com.anthropic.client.okhttp.AnthropicOkHttpClient
-import com.anthropic.models.messages.MessageCreateParams
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
- * Asks Claude how to think about the next step, without giving the answer away.
+ * AI services the player can choose from. All are called over plain HTTP.
+ * Claude has its own API; the others speak the OpenAI chat-completions protocol.
+ * The default model is only a starting point: the player can pick another from the service's list.
+ */
+enum class Provider(val label: String, val baseUrl: String, val defaultModel: String, val keyUrl: String) {
+    CLAUDE("Claude (Anthropic)", "https://api.anthropic.com/v1", "claude-opus-5-5", "https://platform.claude.com/"),
+    OPENAI("ChatGPT (OpenAI)", "https://api.openai.com/v1", "gpt-5.6", "https://platform.openai.com/api-keys"),
+    GEMINI(
+        "Gemini (Google)",
+        "https://generativelanguage.googleapis.com/v1beta/openai",
+        "gemini-flash-latest",
+        "https://aistudio.google.com/apikey",
+    ),
+    GROK("Grok (xAI)", "https://api.x.ai/v1", "grok-4.7", "https://console.x.ai/"),
+    DEEPSEEK("DeepSeek", "https://api.deepseek.com", "deepseek-v4-pro", "https://platform.deepseek.com/api_keys"),
+    MISTRAL("Mistral", "https://api.mistral.ai/v1", "mistral-large-latest", "https://console.mistral.ai/api-keys"),
+}
+
+/**
+ * Asks an AI how to think about the next step, without giving the answer away.
  * The app hands over the candidates it computed itself, so the model only has to reason,
  * and every hint is checked against the solution before the player sees it.
  */
 object Coach {
-    private const val MODEL = "claude-opus-5-5"
     private const val ATTEMPTS = 2
+
+    /** Which service to ask, with the player's key for it. */
+    class Service(val provider: Provider, val apiKey: String, val model: String)
 
     /** Three increasingly detailed hints, plus the cell and digit they lead to (never shown). */
     class Hint(val levels: List<String>, val cell: Int, val digit: Int)
+
+    /** The service rejected the API key. */
+    class BadKeyException : Exception()
 
     private val SYSTEM_PROMPT = """
         你是數獨教練，任務是教玩家「怎麼想」，不是告訴答案。
@@ -83,26 +109,73 @@ object Coach {
     /**
      * Asks for a hint about [game]; blocks, so call it off the main thread.
      * Returns null when no verified hint came back (the model reasoned wrongly, or the
-     * player's entries contain a mistake). API and network failures are thrown.
+     * player's entries contain a mistake). Throws [BadKeyException] for a rejected key,
+     * IOException when the service can't be reached, and other exceptions for API errors.
      */
-    fun ask(apiKey: String, game: Game, selected: Int): Hint? {
-        val client = AnthropicOkHttpClient.builder().apiKey(apiKey).build()
+    fun ask(service: Service, game: Game, selected: Int): Hint? {
+        val board = describe(game, selected)
+        repeat(ATTEMPTS) {
+            parse(complete(service, board))?.takeIf { isSound(it, game) }?.let { return it }
+        }
+        return null
+    }
+
+    /** The models the player's key can use, for choosing one in the settings. Blocks. */
+    fun models(service: Service): List<String> {
+        val data = request(service, "/models", null).getJSONArray("data")
+        // Gemini lists its models as "models/<id>".
+        return (0 until data.length()).map { data.getJSONObject(it).getString("id").removePrefix("models/") }.sorted()
+    }
+
+    private fun complete(service: Service, board: String): String {
+        val user = JSONObject().put("role", "user").put("content", board)
+        if (service.provider == Provider.CLAUDE) {
+            val body = JSONObject()
+                .put("model", service.model)
+                .put("max_tokens", 16000)
+                .put("system", SYSTEM_PROMPT)
+                .put("messages", JSONArray().put(user))
+            val content = request(service, "/messages", body).getJSONArray("content")
+            // Thinking blocks come first; only the text blocks are the reply.
+            return (0 until content.length()).map { content.getJSONObject(it) }
+                .filter { it.optString("type") == "text" }
+                .joinToString("") { it.getString("text") }
+        }
+        val system = JSONObject().put("role", "system").put("content", SYSTEM_PROMPT)
+        val body = JSONObject().put("model", service.model).put("messages", JSONArray().put(system).put(user))
+        return request(service, "/chat/completions", body)
+            .getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+    }
+
+    /** Sends [body] as a POST, or a GET when it is null, and returns the JSON reply. */
+    private fun request(service: Service, path: String, body: JSONObject?): JSONObject {
+        val connection = URL(service.provider.baseUrl + path).openConnection() as HttpURLConnection
         try {
-            val params = MessageCreateParams.builder()
-                .model(MODEL)
-                .maxTokens(16000L)
-                .system(SYSTEM_PROMPT)
-                .addUserMessage(describe(game, selected))
-                .build()
-            repeat(ATTEMPTS) {
-                val reply = client.messages().create(params).content()
-                    .mapNotNull { block -> block.text().orElse(null)?.text() }
-                    .joinToString("")
-                parse(reply)?.takeIf { isSound(it, game) }?.let { return it }
+            connection.connectTimeout = 15_000
+            // Reasoning models can take a couple of minutes before the first byte arrives.
+            connection.readTimeout = 300_000
+            if (service.provider == Provider.CLAUDE) {
+                connection.setRequestProperty("x-api-key", service.apiKey)
+                connection.setRequestProperty("anthropic-version", "2026-10-21")
+            } else {
+                connection.setRequestProperty("Authorization", "Bearer ${service.apiKey}")
             }
-            return null
+            if (body != null) {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.outputStream.use { it.write(body.toString().toByteArray()) }
+            }
+            val code = connection.responseCode
+            val stream = if (code < 400) connection.inputStream else connection.errorStream
+            val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            // Gemini and Grok answer a bad key with 400 instead of 401.
+            if (code == 401 || code == 403 || (code == 400 && text.contains("api key", ignoreCase = true))) {
+                throw BadKeyException()
+            }
+            if (code >= 400) throw Exception("HTTP $code\n${text.take(400)}")
+            return JSONObject(text)
         } finally {
-            client.close()
+            connection.disconnect()
         }
     }
 }

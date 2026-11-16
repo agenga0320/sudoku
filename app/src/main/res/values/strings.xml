@@ -34,6 +34,10 @@
     <string name="import_error_no_solution">這個題目無解，請檢查數字是否輸入正確。</string>
     <string name="import_error_multiple">這個題目有不只一組解，可能漏了數字，請檢查後再試。</string>
     <string name="import_error_full">題目沒有空格（0），沒有可以填的格子。</string>
+    <string name="update_title">有新版本 %1$s</string>
+    <string name="update_message">目前安裝的是 %1$s。按「下載」會用瀏覽器下載新版的安裝檔，下載完成後點開即可覆蓋安裝，存檔會保留。</string>
+    <string name="update_download">下載</string>
+    <string name="update_later">稍後</string>
     <string name="hint">提示</string>
     <string name="hint_title">解題思路</string>
     <string name="hint_thinking">AI 思考中，可能需要幾十秒…</string>
@@ -42,13 +46,18 @@
     <string name="hint_level_2">怎麼想：%1$s</string>
     <string name="hint_level_3">推理過程：%1$s</string>
     <string name="hint_unreliable">這次沒有拿到可靠的提示：AI 的推理可能有誤，或盤面上有填錯的數字。可以再試一次。</string>
-    <string name="hint_error_key">金鑰無效，請確認是否貼上完整的金鑰。</string>
+    <string name="hint_error_key">金鑰無效，請確認選對了 AI 服務，並貼上完整的金鑰。</string>
     <string name="hint_error_network">無法連線，請檢查網路後再試。</string>
-    <string name="hint_error">AI 回覆錯誤：%1$s\n\n若訊息提到 credit balance，表示帳戶額度不足，請先到 Claude Console 儲值。</string>
-    <string name="key_title">設定 Claude API 金鑰</string>
-    <string name="key_instructions">提示功能使用你自己的 Claude API 金鑰，費用依用量從你的帳戶扣除。\n\n1. 到 Claude Console 註冊或登入。\n2. 先儲值額度（API 預付制；Claude 的免費版或 Pro 訂閱不含 API 額度）。\n3. 在 API Keys 建立金鑰並複製（只會完整顯示一次）。\n4. 貼到下面。\n\n金鑰只存在這支手機上。長按「提示」可再回到這裡修改；清空後儲存即刪除。</string>
-    <string name="key_hint">sk-ant-…</string>
-    <string name="key_get">開啟 Claude Console</string>
+    <string name="hint_error">AI 服務回覆錯誤：\n%1$s\n\n常見原因：帳戶額度不足，或模型名稱不存在（可在設定裡按「從清單選擇模型」）。</string>
+    <string name="key_title">設定 AI 服務</string>
+    <string name="key_instructions">提示功能使用你自己的 API 金鑰，費用依用量從你在該服務的帳戶扣除。\n\n1. 選擇要用的 AI 服務。\n2. 按「開啟取得金鑰的網頁」，註冊或登入後建立 API 金鑰並複製（多數只會完整顯示一次）。\n3. 多數服務要先儲值才能用；聊天用的訂閱（Claude Pro、ChatGPT Plus 等）不含 API 額度。\n4. 貼到下面。\n\n金鑰只存在這支手機上，每個服務各存一把。長按「提示」可再回到這裡修改；清空後儲存即刪除。</string>
+    <string name="key_hint">API 金鑰</string>
+    <string name="key_get">開啟取得金鑰的網頁</string>
     <string name="key_save">儲存</string>
+    <string name="provider_label">AI 服務</string>
+    <string name="model_hint">模型名稱</string>
+    <string name="model_pick">從清單選擇模型</string>
+    <string name="models_loading">載入模型清單中…</string>
+    <string name="key_needed">請先輸入金鑰</string>
     <string name="ai_prompt">請辨識這張圖片中的數獨題目，並嚴格依照下列格式輸出：\n\n1. 總共 9 排，每排剛好 9 個數字，由上到下、由左到右對應盤面。\n2. 空白的格子用數字 0 表示。\n3. 同一排的數字之間不要有空格、逗號或任何其他符號。\n4. 只輸出這 9 排數字，不要加上任何說明、標題或程式碼區塊。\n5. 輸出前請逐排核對：每排是否剛好 9 個數字、位置是否與圖片一致。看不清楚的格子請填 0，不要猜測。\n\n輸出範例：\n530070000\n600195000\n098000060\n800060003\n400803001\n700020006\n060000280\n000419005\n000080079</string>
 </resources>

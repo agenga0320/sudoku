@@ -18,8 +18,8 @@ android {
         applicationId = "io.github.agenga0320.sudoku"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.3.1"
+        versionCode = 8
+        versionName = "1.4.0"
     }
 
     signingConfigs {
@@ -37,7 +37,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             signingConfig = signingConfigs.findByName("release")
         }
     }
@@ -52,6 +52,5 @@ android {
 base.archivesName.set("Sudoku-v${android.defaultConfig.versionName}")
 
 dependencies {
-    implementation("com.anthropic:anthropic-java:3.3.0")
     testImplementation("junit:junit:4.13.2")
 }
