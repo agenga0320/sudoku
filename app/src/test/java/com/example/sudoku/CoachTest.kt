@@ -42,6 +42,16 @@ class CoachTest {
     }
 
     @Test
+    fun chatLinkCarriesTheQuestionOnlyWhereTheSiteTakesIt() {
+        val question = Coach.chatPrompt(game, empty)
+        assertTrue(question.contains("r1: "))
+        val link = ChatSite.CHATGPT.link("第 1 橫排 a b")
+        assertTrue(link.startsWith("https://chatgpt.com/?q=%E7%AC%AC%201%20"))
+        assertFalse(link.contains("+") || link.contains(" "))
+        assertEquals("https://gemini.google.com/app", ChatSite.GEMINI.link(question))
+    }
+
+    @Test
     fun candidatesExcludePeersAndIncludeSolution() {
         val candidates = Coach.candidates(game.values, empty)
         assertTrue(game.solution[empty] in candidates)

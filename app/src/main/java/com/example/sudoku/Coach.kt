@@ -25,6 +25,24 @@ enum class Provider(val label: String, val baseUrl: String, val defaultModel: St
 }
 
 /**
+ * AI chat websites the player may already be signed in to. The app only opens the page;
+ * where [prefill] is true the site accepts the question in the address, appended to [url].
+ */
+enum class ChatSite(val label: String, val url: String, val prefill: Boolean) {
+    CHATGPT("ChatGPT", "https://chatgpt.com/?q=", true),
+    CLAUDE("Claude", "https://claude.ai/new?q=", true),
+    GEMINI("Gemini", "https://gemini.google.com/app", false),
+    GROK("Grok", "https://grok.com/?q=", true),
+    COPILOT("Copilot", "https://copilot.microsoft.com/?q=", true),
+    DEEPSEEK("DeepSeek", "https://chat.deepseek.com/", false),
+    MISTRAL("Le Chat (Mistral)", "https://chat.mistral.ai/chat?q=", true);
+
+    /** The address that opens this site with [question] asked, or just the site if it can't prefill. */
+    fun link(question: String) =
+        if (prefill) url + java.net.URLEncoder.encode(question, "UTF-8").replace("+", "%20") else url
+}
+
+/**
  * Asks an AI how to think about the next step, without giving the answer away.
  * The app hands over the candidates it computed itself, so the model only has to reason,
  * and every hint is checked against the solution before the player sees it.
@@ -56,6 +74,19 @@ object Coach {
         [3] 一步步帶玩家推理，直到可以確定某一格，但最後一步留給玩家自己完成，不要說出答案。
         [CHECK] r<橫排>c<直行>=<數字>（這一行玩家看不到，只給程式檢查你的推理用）
     """.trimIndent()
+
+    // For a chat website the player talks to the AI directly, so the hints come one at a time
+    // on request instead of in a fixed format, and nothing can be checked against the solution.
+    private val CHAT_PROMPT = """
+        你是數獨教練，請教我「怎麼想」，不要告訴我答案。
+        座標：r 是由上往下第幾橫排，c 是由左往右第幾直行；九宮格由左上到右下編號 1 到 9。回答時請說「第 N 橫排、第 N 直行、第 N 宮」。
+        請找出下一個能靠邏輯確定的格子，選最容易看出來的。只根據下面的候選數字推理，不確定就說不確定。
+        先只告訴我該看哪一橫排、直行或宮。我說「再多一點」時，再告訴我用什麼技巧；我再說一次，才一步步帶我推理。任何時候都不要直接說出該填的數字，除非我明確要求。
+        請用繁體中文回答。
+    """.trimIndent()
+
+    /** What to ask on a chat website: the coaching request followed by the board. */
+    fun chatPrompt(game: Game, selected: Int) = CHAT_PROMPT + "\n\n" + describe(game, selected)
 
     /** Digits that do not yet appear among the peers of empty cell [i]. */
     fun candidates(values: IntArray, i: Int): List<Int> =

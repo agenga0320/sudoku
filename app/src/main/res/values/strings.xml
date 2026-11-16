@@ -60,6 +60,11 @@
     <string name="update_settings">前往設定</string>
     <string name="update_error_install">無法開啟安裝程式，請從下載完成的通知重試。</string>
     <string name="hint">提示</string>
+    <string name="hint_mode_title">要用哪個 AI 給提示？</string>
+    <string name="hint_mode_account">%1$s（用我的帳號，不用金鑰）</string>
+    <string name="hint_mode_api">API 金鑰（提示顯示在 app 內）</string>
+    <string name="chat_copied">題目已複製。如果對話框是空的，長按貼上再送出。</string>
+    <string name="chat_error">找不到可以開啟網頁的瀏覽器。</string>
     <string name="hint_title">解題思路</string>
     <string name="hint_thinking">AI 思考中，可能需要幾十秒…</string>
     <string name="hint_more">再多一點</string>
@@ -71,7 +76,7 @@
     <string name="hint_error_network">無法連線，請檢查網路後再試。</string>
     <string name="hint_error">AI 服務回覆錯誤：\n%1$s\n\n常見原因：帳戶額度不足，或模型名稱不存在（可在設定裡按「從清單選擇模型」）。</string>
     <string name="key_title">設定 AI 服務</string>
-    <string name="key_instructions">提示功能使用你自己的 API 金鑰，費用依用量從你在該服務的帳戶扣除。\n\n1. 選擇要用的 AI 服務。\n2. 按「開啟取得金鑰的網頁」，註冊或登入後建立 API 金鑰並複製（多數只會完整顯示一次）。\n3. 多數服務要先儲值才能用；聊天用的訂閱（Claude Pro、ChatGPT Plus 等）不含 API 額度。\n4. 貼到下面。\n\n金鑰只存在這支手機上，每個服務各存一把。長按「提示」可再回到這裡修改；清空後儲存即刪除。</string>
+    <string name="key_instructions">提示功能使用你自己的 API 金鑰，費用依用量從你在該服務的帳戶扣除。\n\n1. 選擇要用的 AI 服務。\n2. 按「開啟取得金鑰的網頁」，註冊或登入後建立 API 金鑰並複製（多數只會完整顯示一次）。\n3. 多數服務要先儲值才能用；聊天用的訂閱（Claude Pro、ChatGPT Plus 等）不含 API 額度。\n4. 貼到下面。\n\n金鑰只存在這支手機上，每個服務各存一把。長按「提示」可以重新選擇取得提示的方式，選「API 金鑰」就會回到這裡；清空後儲存即刪除。</string>
     <string name="key_hint">API 金鑰</string>
     <string name="key_get">開啟取得金鑰的網頁</string>
     <string name="key_save">儲存</string>

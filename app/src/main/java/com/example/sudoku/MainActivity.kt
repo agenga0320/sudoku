@@ -6,6 +6,7 @@ import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.drawable.Drawable
 import android.net.Uri
@@ -144,7 +145,7 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.btnImport).setOnClickListener { showImportDialog() }
         findViewById<Button>(R.id.btnHint).apply {
             setOnClickListener { requestHint() }
-            setOnLongClickListener { showKeyDialog(null); true }
+            setOnLongClickListener { chooseHintMode(null); true }
         }
         btnUndo.setOnClickListener { if (game?.undo() == true) refresh() }
         btnRedo.setOnClickListener { if (game?.redo() == true) refresh() }
@@ -465,6 +466,56 @@ class MainActivity : Activity() {
     private fun requestHint() {
         val g = game ?: return
         if (generating || g.isSolved || g.isFull) return
+        // The saved mode is a chat site's name, or MODE_API for hints fetched with an API key.
+        val mode = getPreferences(MODE_PRIVATE).getString(KEY_HINT_MODE, null)
+            ?: return chooseHintMode { requestHint() }
+        val site = ChatSite.values().firstOrNull { it.name == mode }
+        if (site != null) openChat(site, g) else requestApiHint(g)
+    }
+
+    /**
+     * Asks where hints should come from: a chat website the player is signed in to, or an API key.
+     * Remembers the answer; long-pressing the hint button asks again.
+     */
+    private fun chooseHintMode(then: (() -> Unit)?) {
+        val sites = ChatSite.values()
+        val labels = sites.map { getString(R.string.hint_mode_account, it.label) } + getString(R.string.hint_mode_api)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.hint_mode_title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                val site = sites.getOrNull(which)
+                getPreferences(MODE_PRIVATE).edit().putString(KEY_HINT_MODE, site?.name ?: MODE_API).apply()
+                // Choosing the API always shows its settings, so the key can be changed from here.
+                if (site == null) showKeyDialog(then) else then?.invoke()
+            }
+            .show()
+    }
+
+    /**
+     * Slides the chat website up over the game as a browser custom tab, which shares the
+     * browser's sign-ins; Back returns to the board. The question is also copied, for sites
+     * that don't take it from the address or when it doesn't arrive.
+     */
+    private fun openChat(site: ChatSite, g: Game) {
+        val question = Coach.chatPrompt(g, board.selected)
+        getSystemService(ClipboardManager::class.java)
+            .setPrimaryClip(ClipData.newPlainText(getString(R.string.hint), question))
+        Toast.makeText(this, R.string.chat_copied, Toast.LENGTH_LONG).show()
+
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(site.link(question)))
+        // This extra is what makes a browser open the page as a custom tab instead of a full window.
+        intent.putExtras(Bundle().apply { putBinder("android.support.customtabs.extra.SESSION", null) })
+        // Aim at the default browser, so that the AI's own app doesn't take the link and switch apps.
+        val browser = packageManager.resolveActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")), PackageManager.MATCH_DEFAULT_ONLY
+        )?.activityInfo?.packageName
+        if (browser != null && browser != "android") intent.setPackage(browser)
+        runCatching { startActivity(intent) }
+            .recoverCatching { startActivity(intent.setPackage(null)) }
+            .onFailure { alert(getString(R.string.chat_error)) }
+    }
+
+    private fun requestApiHint(g: Game) {
         val service = savedService(savedProvider())
         if (service.apiKey.isEmpty()) return showKeyDialog { requestHint() }
 
@@ -688,6 +739,8 @@ class MainActivity : Activity() {
     private companion object {
         const val KEY_GAME = "game"
         const val KEY_SKIPPED = "skipped_version"
+        const val KEY_HINT_MODE = "hint_mode"
+        const val MODE_API = "API"
         const val KEY_PROVIDER = "ai_provider"
 
         // Followed by the provider's name: each service keeps its own key and model.
