@@ -8,11 +8,55 @@ enum class Difficulty(val clues: Int) {
     HARD(26),
 
     /** A puzzle imported by the user rather than generated. */
-    CUSTOM(0);
+    CUSTOM(0),
+
+    /** One of the well-known hard puzzles in [Classics]. */
+    CLASSIC(0);
 
     companion object {
         val generated = listOf(EASY, MEDIUM, HARD)
     }
+}
+
+/** A well-known hard puzzle. Progress is saved under [id], so an id must never change. */
+class Classic(val id: String, val name: String, val givens: String)
+
+/**
+ * Famous hard puzzles the player can pick by name. The first four grids were checked against
+ * the pages cited; the last two come without a readable source and rest on the unit test
+ * that every grid here has exactly one solution.
+ */
+object Classics {
+    val all = listOf(
+        // sudokuwiki.org/Arto_Inkala_Sudoku
+        Classic(
+            "inkala2012", "Arto Inkala 2012（號稱世界最難）",
+            "800000000003600000070090200050007000000045700000100030001000068008500010090000400",
+        ),
+        // sudokuwiki.org/Escargot
+        Classic(
+            "escargot", "AI Escargot（Arto Inkala，2006）",
+            "100007090030020008009600500005300900010080002600004000300000010040000007007000300",
+        ),
+        // sci.math thread "hard sudoku, 'Platinum Blonde'", 2013
+        Classic(
+            "platinum", "Platinum Blonde",
+            "000000012000000003002300400001800005060070800000009000008500000900040500470006000",
+        ),
+        // stolaf.edu/people/hansonr/sudoku/easter_monster.htm
+        Classic(
+            "easter", "Easter Monster",
+            "100000089000009002000000450007600000030040000900002005004070000500008010060300000",
+        ),
+        Classic(
+            "nugget", "Golden Nugget",
+            "000000039000001005003050800008090006070002000100400000009080050020000600400700000",
+        ),
+        Classic(
+            "bruteforce", "暴力破解剋星（17 個提示）",
+            "000000000000003085001020000000507000004000100090000000500000073002010000000040009",
+        ),
+    )
 }
 
 /** Grids are 81 ints in row-major order; 0 means empty. */

@@ -50,6 +50,9 @@ class MainActivity : Activity() {
     private lateinit var lockedBackground: Drawable
 
     private var game: Game? = null
+
+    // Id of the well-known puzzle being played, or null for a generated or imported one.
+    private var classicId: String? = null
     private var notesMode = false
 
     // In lock mode a number button picks the digit and tapping an empty cell fills it in.
@@ -190,6 +193,7 @@ class MainActivity : Activity() {
         if (saved != null) {
             game = saved
             board.game = saved
+            classicId = getPreferences(MODE_PRIVATE).getString(KEY_CLASSIC_ID, null)
             refresh()
         } else {
             startNewGame(Difficulty.MEDIUM)
@@ -229,7 +233,20 @@ class MainActivity : Activity() {
         super.onPause()
         handler.removeCallbacks(tick)
         handler.removeCallbacks(downloadPoll)
-        game?.let { getPreferences(MODE_PRIVATE).edit().putString(KEY_GAME, it.encode()).apply() }
+        game?.let {
+            getPreferences(MODE_PRIVATE).edit()
+                .putString(KEY_GAME, it.encode())
+                .putString(KEY_CLASSIC_ID, classicId)
+                .apply()
+        }
+        saveClassic()
+    }
+
+    /** Keeps the progress on the well-known puzzle being played, so it can be picked up again later. */
+    private fun saveClassic() {
+        val id = classicId ?: return
+        val g = game ?: return
+        getPreferences(MODE_PRIVATE).edit().putString(KEY_CLASSIC + id, g.encode()).apply()
     }
 
     private fun buildNumpad() {
@@ -322,17 +339,62 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.restart_title)
             .setMessage(R.string.restart_message)
-            .setPositiveButton(R.string.restart) { _, _ -> beginGame(Game(g.difficulty, g.solution, g.givens)) }
+            .setPositiveButton(R.string.restart) { _, _ ->
+                beginGame(Game(g.difficulty, g.solution, g.givens), classicId)
+            }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
     private fun chooseDifficulty() {
-        val labels = Difficulty.generated.map { difficultyLabel(it) }.toTypedArray()
+        val labels = Difficulty.generated.map { difficultyLabel(it) } + getString(R.string.classic_menu)
         AlertDialog.Builder(this)
             .setTitle(R.string.choose_difficulty)
-            .setItems(labels) { _, which -> startNewGame(Difficulty.generated[which]) }
+            .setItems(labels.toTypedArray()) { _, which ->
+                val difficulty = Difficulty.generated.getOrNull(which)
+                if (difficulty != null) startNewGame(difficulty) else chooseClassic()
+            }
             .show()
+    }
+
+    /** Lists the well-known hard puzzles with how far the player got on each. */
+    private fun chooseClassic() {
+        saveClassic()
+        val prefs = getPreferences(MODE_PRIVATE)
+        val labels = Classics.all.map { classic ->
+            val saved = prefs.getString(KEY_CLASSIC + classic.id, null)?.let(Game::decode)
+            val status = when {
+                saved == null -> getString(R.string.classic_new)
+                saved.isSolved -> getString(R.string.classic_done, formatTime(saved.elapsedSeconds))
+                else -> getString(R.string.classic_progress, formatTime(saved.elapsedSeconds))
+            }
+            "${classic.name}\n$status"
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.classic_title)
+            .setItems(labels.toTypedArray()) { _, which -> startClassic(Classics.all[which]) }
+            .show()
+    }
+
+    /** Resumes the saved progress on [classic], or starts it fresh if there is none or it was finished. */
+    private fun startClassic(classic: Classic) {
+        if (generating) return
+        val saved = getPreferences(MODE_PRIVATE).getString(KEY_CLASSIC + classic.id, null)
+            ?.let(Game::decode)?.takeUnless { it.isSolved }
+        if (saved != null) return beginGame(saved, classic.id)
+        val givens = Sudoku.parse(classic.givens) ?: return
+        generating = true
+        board.isEnabled = false
+        txtDifficulty.setText(R.string.generating)
+        Thread {
+            val solution = Sudoku.solve(givens)
+            runOnUiThread {
+                generating = false
+                if (isDestroyed) return@runOnUiThread
+                board.isEnabled = true
+                if (solution != null) beginGame(Game(Difficulty.CLASSIC, solution, givens), classic.id)
+            }
+        }.start()
     }
 
     private fun showImportDialog() {
@@ -780,7 +842,12 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setMessage(message).setPositiveButton(R.string.close, null).show()
     }
 
-    private fun beginGame(g: Game) {
+    /** [classic] is the id of the well-known puzzle [g] is, or null for any other game. */
+    private fun beginGame(g: Game, classic: String? = null) {
+        // A conversation about the previous board would only mislead on this one.
+        if (chatPanel.visibility == View.VISIBLE) closeChat()
+        saveClassic()
+        classicId = classic
         game = g
         board.game = g
         board.selected = -1
@@ -825,7 +892,8 @@ class MainActivity : Activity() {
         board.highlightDigit = lockedDigit
         board.invalidate()
         setToggle(btnLock, lockMode, R.drawable.ic_lock, R.drawable.ic_lock_off, R.string.lock_on, R.string.lock_off)
-        txtDifficulty.text = difficultyLabel(g.difficulty)
+        txtDifficulty.text =
+            Classics.all.firstOrNull { it.id == classicId }?.name ?: difficultyLabel(g.difficulty)
         txtTime.text = formatTime(g.elapsedSeconds)
         btnUndo.isEnabled = g.canUndo
         btnUndo.alpha = if (g.canUndo) 1f else 0.4f
@@ -854,6 +922,7 @@ class MainActivity : Activity() {
             Difficulty.MEDIUM -> R.string.medium
             Difficulty.HARD -> R.string.hard
             Difficulty.CUSTOM -> R.string.custom
+            Difficulty.CLASSIC -> R.string.classic
         }
     )
 
@@ -862,6 +931,11 @@ class MainActivity : Activity() {
 
     private companion object {
         const val KEY_GAME = "game"
+
+        // The well-known puzzle KEY_GAME holds, if it is one; each one's progress is also
+        // kept under KEY_CLASSIC followed by its id.
+        const val KEY_CLASSIC_ID = "classic_id"
+        const val KEY_CLASSIC = "classic_"
         const val KEY_SKIPPED = "skipped_version"
         const val KEY_HINT_MODE = "hint_mode"
         const val MODE_API = "API"

@@ -18,8 +18,8 @@ android {
         applicationId = "io.github.agenga0320.sudoku"
         minSdk = 26
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.4.4"
+        versionCode = 13
+        versionName = "1.4.5"
     }
 
     signingConfigs {

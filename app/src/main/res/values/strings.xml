@@ -23,6 +23,12 @@
     <string name="close">關閉</string>
 
     <string name="custom">自訂</string>
+    <string name="classic">知名難題</string>
+    <string name="classic_menu">知名難題…</string>
+    <string name="classic_title">選擇知名難題</string>
+    <string name="classic_new">未開始</string>
+    <string name="classic_progress">進行中 · %1$s</string>
+    <string name="classic_done">已完成 · %1$s</string>
     <string name="import_puzzle">匯入題目</string>
     <string name="import_title">匯入數獨題目</string>
     <string name="import_instructions">輸入 9 排數字，每排 9 個，空格用 0 表示。</string>

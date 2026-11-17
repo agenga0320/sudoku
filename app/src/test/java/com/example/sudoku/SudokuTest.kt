@@ -211,6 +211,17 @@ class SudokuTest {
     }
 
     @Test
+    fun everyClassicIsAValidPuzzleWithOneSolution() {
+        assertEquals(Classics.all.size, Classics.all.map { it.id }.toSet().size)
+        for (classic in Classics.all) {
+            val givens = Sudoku.parse(classic.givens)
+            assertNotNull(classic.name, givens)
+            assertFalse(classic.name, Sudoku.hasConflict(givens!!))
+            assertEquals(classic.name, 1, Sudoku.countSolutions(givens, 2))
+        }
+    }
+
+    @Test
     fun updateVersionsCompareAsNumbers() {
         assertTrue(Update.isNewer("1.10.0", "1.9.3"))
         assertTrue(Update.isNewer("1.4.1", "1.4"))
