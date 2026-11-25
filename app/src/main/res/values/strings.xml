@@ -9,6 +9,7 @@
     <string name="easy">簡單</string>
     <string name="medium">中等</string>
     <string name="hard">困難</string>
+    <string name="expert">專家</string>
     <string name="undo">復原</string>
     <string name="redo">重做</string>
     <string name="erase">清除</string>

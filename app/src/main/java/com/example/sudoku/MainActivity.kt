@@ -998,6 +998,7 @@ class MainActivity : Activity() {
             Difficulty.EASY -> R.string.easy
             Difficulty.MEDIUM -> R.string.medium
             Difficulty.HARD -> R.string.hard
+            Difficulty.EXPERT -> R.string.expert
             Difficulty.CUSTOM -> R.string.custom
             Difficulty.CLASSIC -> R.string.classic
         }

@@ -33,7 +33,11 @@ class SudokuTest {
                 }
                 assertEquals(1, Sudoku.countSolutions(puzzle.givens))
                 val clues = puzzle.givens.count { it != 0 }
-                assertTrue("$difficulty has $clues clues", clues >= difficulty.clues && clues <= difficulty.clues + 6)
+                if (difficulty == Difficulty.EXPERT) {
+                    assertTrue("expert seed $seed needs only singles", !Sudoku.solvableBySingles(puzzle.givens))
+                } else {
+                    assertTrue("$difficulty has $clues clues", clues >= difficulty.clues && clues <= difficulty.clues + 6)
+                }
             }
         }
     }
@@ -208,6 +212,17 @@ class SudokuTest {
 
         assertNull(Game.decode("garbage"))
         assertNull(Game.decode(""))
+    }
+
+    @Test
+    fun singlesSolveAnEasyPuzzleButNotTheWellKnownHardOnes() {
+        // The import example, a newspaper-style easy puzzle.
+        val easy = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+        assertTrue(Sudoku.solvableBySingles(Sudoku.parse(easy)!!))
+        // "bruteforce" is only hard for a backtracking program; singles solve it.
+        for (classic in Classics.all) {
+            assertEquals(classic.id, classic.id == "bruteforce", Sudoku.solvableBySingles(Sudoku.parse(classic.givens)!!))
+        }
     }
 
     @Test

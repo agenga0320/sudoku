@@ -7,6 +7,9 @@ enum class Difficulty(val clues: Int) {
     MEDIUM(32),
     HARD(26),
 
+    /** Dug until no clue can go, and only kept if the basic singles alone can't solve it. */
+    EXPERT(0),
+
     /** A puzzle imported by the user rather than generated. */
     CUSTOM(0),
 
@@ -14,7 +17,7 @@ enum class Difficulty(val clues: Int) {
     CLASSIC(0);
 
     companion object {
-        val generated = listOf(EASY, MEDIUM, HARD)
+        val generated = listOf(EASY, MEDIUM, HARD, EXPERT)
     }
 }
 
@@ -77,6 +80,56 @@ object Sudoku {
 
     /** Generates a puzzle with exactly one solution. */
     fun generate(difficulty: Difficulty, random: Random = Random.Default): Puzzle {
+        if (difficulty != Difficulty.EXPERT) return dig(difficulty.clues, random)
+        // shortcut: gives up after a few tries and keeps a singles-solvable one; never seen in tests.
+        var puzzle = dig(0, random)
+        repeat(EXPERT_TRIES) {
+            if (!solvableBySingles(puzzle.givens)) return puzzle
+            puzzle = dig(0, random)
+        }
+        return puzzle
+    }
+
+    private const val EXPERT_TRIES = 50
+
+    /**
+     * True if filling in naked singles (a cell with one candidate) and hidden singles (a digit
+     * with one place in a row, column or box) again and again completes [grid].
+     */
+    fun solvableBySingles(grid: IntArray): Boolean {
+        val g = grid.copyOf()
+        while (true) {
+            if (g.none { it == 0 }) return true
+            val candidates = IntArray(CELLS) { i ->
+                if (g[i] != 0) 0 else (1..9).fold(0) { m, d -> if (peers[i].any { g[it] == d }) m else m or (1 shl d) }
+            }
+            var progress = false
+            for (i in 0 until CELLS) {
+                if (g[i] == 0 && Integer.bitCount(candidates[i]) == 1) {
+                    g[i] = Integer.numberOfTrailingZeros(candidates[i])
+                    progress = true
+                }
+            }
+            for (unit in units) for (d in 1..9) {
+                val cells = unit.filter { candidates[it] and (1 shl d) != 0 }
+                if (cells.size == 1 && g[cells[0]] == 0) {
+                    g[cells[0]] = d
+                    progress = true
+                }
+            }
+            if (!progress) return false
+        }
+    }
+
+    private val units: List<List<Int>> = (0 until 9).flatMap { n ->
+        listOf(
+            (0 until CELLS).filter { it / 9 == n },
+            (0 until CELLS).filter { it % 9 == n },
+            (0 until CELLS).filter { boxOf(it) == n },
+        )
+    }
+
+    private fun dig(target: Int, random: Random): Puzzle {
         val solution = IntArray(CELLS)
         Search(solution, random).run(1)
 
@@ -84,7 +137,7 @@ object Sudoku {
         val givens = solution.copyOf()
         var clues = CELLS
         for (i in (0 until CELLS).shuffled(random)) {
-            if (clues <= difficulty.clues) break
+            if (clues <= target) break
             val digit = givens[i]
             givens[i] = 0
             if (countSolutions(givens, 2) == 1) clues-- else givens[i] = digit
