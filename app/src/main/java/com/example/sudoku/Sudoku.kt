@@ -108,6 +108,21 @@ object Sudoku {
         return IntArray(CELLS) { digits[it] - '0' }
     }
 
+    /** Every run of 9 consecutive lines of exactly 9 digits in [text] (such as an AI's reply), in order. */
+    fun grids(text: String): List<String> {
+        val found = ArrayList<String>()
+        val run = ArrayList<String>()
+        for (line in text.lines().map { it.trim() } + "") {
+            if (line.length == 9 && line.all { it in '0'..'9' }) {
+                run += line
+                continue
+            }
+            if (run.size >= 9) found += run.takeLast(9).joinToString("\n")
+            run.clear()
+        }
+        return found
+    }
+
     /** True if the same digit appears twice in a row, column or box. */
     fun hasConflict(grid: IntArray): Boolean =
         (0 until CELLS).any { i -> grid[i] != 0 && peers[i].any { grid[it] == grid[i] } }

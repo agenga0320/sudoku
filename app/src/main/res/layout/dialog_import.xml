@@ -50,12 +50,12 @@
             android:textSize="14sp" />
 
         <Button
-            android:id="@+id/btnCopyPrompt"
+            android:id="@+id/btnImportAi"
             style="?android:attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="-12dp"
-            android:text="@string/copy_prompt"
+            android:text="@string/import_ai"
             android:textColor="@color/accent" />
     </LinearLayout>
 </ScrollView>

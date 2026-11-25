@@ -178,6 +178,16 @@
                 android:textColor="@color/text_secondary" />
 
             <Button
+                android:id="@+id/btnChatImport"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:text="@string/import_chat_read"
+                android:textColor="@color/accent"
+                android:visibility="gone" />
+
+            <Button
                 android:id="@+id/btnChatTop"
                 style="?android:attr/borderlessButtonStyle"
                 android:layout_width="wrap_content"

@@ -10,14 +10,15 @@ import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.drawable.Drawable
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import android.provider.Settings
 import android.text.format.Formatter
 import android.view.View
 import android.webkit.CookieManager
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -33,6 +34,7 @@ import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import org.json.JSONTokener
 import java.io.IOException
 import java.util.Locale
 
@@ -84,6 +86,13 @@ class MainActivity : Activity() {
     private var chatSite: ChatSite? = null
     private var chatQuestion = ""
     private lateinit var pageScroll: ScrollView
+
+    // The chat is reading a puzzle from a photo, so the reply can be read back as an import.
+    private lateinit var btnChatImport: View
+
+    // A photo picker the chat page opened, waiting for the player's choice.
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var cameraPhoto: Uri? = null
 
     // Update download: ids are the download manager's, -1 meaning none.
     private var promptedDownload = -1L
@@ -171,6 +180,8 @@ class MainActivity : Activity() {
         pageScroll = findViewById(R.id.pageScroll)
         findViewById<Button>(R.id.btnChatTop).setOnClickListener { pageScroll.smoothScrollTo(0, 0) }
         findViewById<Button>(R.id.btnChatClose).setOnClickListener { closeChat() }
+        btnChatImport = findViewById(R.id.btnChatImport)
+        btnChatImport.setOnClickListener { readImportFromChat() }
         btnUndo.setOnClickListener { if (game?.undo() == true) refresh() }
         btnRedo.setOnClickListener { if (game?.redo() == true) refresh() }
         findViewById<View>(R.id.btnErase).setOnClickListener {
@@ -209,6 +220,20 @@ class MainActivity : Activity() {
             web != null && web.canGoBack() -> web.goBack()
             else -> closeChat()
         }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode != REQUEST_FILE) return super.onActivityResult(requestCode, resultCode, data)
+        // The page waits for an answer, even an empty one, before it opens the picker again.
+        val picked = WebChromeClient.FileChooserParams.parseResult(resultCode, data)
+        // The camera returns no address: the photo is in the file it was given.
+        val taken = cameraPhoto?.takeIf {
+            resultCode == RESULT_OK && PhotoProvider.newPhotoTaken(this, it)
+        }
+        fileCallback?.onReceiveValue(picked ?: taken?.let { arrayOf(it) })
+        fileCallback = null
+        cameraPhoto = null
     }
 
     override fun onDestroy() {
@@ -397,12 +422,12 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun showImportDialog() {
+    private fun showImportDialog(puzzle: String? = null) {
         if (generating) return
         val view = layoutInflater.inflate(R.layout.dialog_import, null)
         val input = view.findViewById<EditText>(R.id.editPuzzle)
         val error = view.findViewById<TextView>(R.id.txtImportError)
-        view.findViewById<Button>(R.id.btnCopyPrompt).setOnClickListener { copyPrompt() }
+        input.setText(puzzle)
 
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.import_title)
@@ -410,6 +435,10 @@ class MainActivity : Activity() {
             .setPositiveButton(R.string.import_start, null)
             .setNegativeButton(R.string.cancel, null)
             .show()
+        view.findViewById<Button>(R.id.btnImportAi).setOnClickListener {
+            dialog.dismiss()
+            importWithAi()
+        }
 
         // Set after show() so that an invalid puzzle does not dismiss the dialog.
         val start = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
@@ -456,12 +485,35 @@ class MainActivity : Activity() {
         return getString(R.string.import_error_conflict, conflict / 9 + 1, conflict % 9 + 1, grid[conflict])
     }
 
-    private fun copyPrompt() {
-        val clipboard = getSystemService(ClipboardManager::class.java)
-        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.copy_prompt), getString(R.string.ai_prompt)))
-        // Android 13+ shows its own confirmation when the clipboard changes.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            Toast.makeText(this, R.string.prompt_copied, Toast.LENGTH_SHORT).show()
+    /**
+     * Opens the chat site the hints use (or asks for one) with the photo-reading prompt; the player
+     * attaches the photo there, and "讀取題目" takes the grid from the AI's reply.
+     */
+    private fun importWithAi() {
+        val mode = getPreferences(MODE_PRIVATE).getString(KEY_HINT_MODE, null)
+        val site = ChatSite.values().firstOrNull { it.name == mode }
+        if (site != null) return openChat(site, getString(R.string.ai_prompt), R.string.import_chat_copied, true)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.hint_mode_title)
+            .setItems(ChatSite.values().map { it.label }.toTypedArray()) { _, which ->
+                openChat(ChatSite.values()[which], getString(R.string.ai_prompt), R.string.import_chat_copied, true)
+            }
+            .show()
+    }
+
+    /** Takes the last 9×9 grid on the chat page (the AI's reply, not the prompt's example) into the import dialog. */
+    private fun readImportFromChat() {
+        val web = chatWeb ?: return
+        web.evaluateJavascript("document.body.innerText") { result ->
+            val text = runCatching { JSONTokener(result).nextValue() as? String }.getOrNull().orEmpty()
+            val example = getString(R.string.import_example)
+            val grid = Sudoku.grids(text).lastOrNull { it != example }
+            if (grid == null) {
+                Toast.makeText(this, R.string.import_chat_none, Toast.LENGTH_LONG).show()
+            } else {
+                closeChat()
+                showImportDialog(grid)
+            }
         }
     }
 
@@ -596,7 +648,8 @@ class MainActivity : Activity() {
         val mode = getPreferences(MODE_PRIVATE).getString(KEY_HINT_MODE, null)
             ?: return chooseHintMode { requestHint() }
         val site = ChatSite.values().firstOrNull { it.name == mode }
-        if (site != null) openChat(site, g) else requestApiHint(g)
+        if (site != null) openChat(site, Coach.chatPrompt(g, board.selected), R.string.chat_copied, false)
+        else requestApiHint(g)
     }
 
     /**
@@ -622,13 +675,13 @@ class MainActivity : Activity() {
      * only displays the page: the player types into the site itself. The question is also
      * copied, for sites that don't take it from the address or when it doesn't arrive.
      */
-    private fun openChat(site: ChatSite, g: Game) {
-        val question = Coach.chatPrompt(g, board.selected)
+    private fun openChat(site: ChatSite, question: String, copied: Int, import: Boolean) {
         getSystemService(ClipboardManager::class.java)
             .setPrimaryClip(ClipData.newPlainText(getString(R.string.hint), question))
-        Toast.makeText(this, R.string.chat_copied, Toast.LENGTH_LONG).show()
+        Toast.makeText(this, copied, Toast.LENGTH_LONG).show()
         chatSite = site
         chatQuestion = question
+        btnChatImport.visibility = if (import) View.VISIBLE else View.GONE
 
         // Created on first use: a web view is too heavy to load with every start of the app.
         val web = chatWeb ?: WebView(this).also {
@@ -645,6 +698,30 @@ class MainActivity : Activity() {
                     chatProgress.progress = progress
                     chatProgress.visibility = if (loading) View.VISIBLE else View.INVISIBLE
                     txtChatSite.text = if (loading) getString(R.string.chat_loading, name) else name
+                }
+
+                // Lets the page's attach button pick a photo, such as one of a puzzle to import.
+                override fun onShowFileChooser(
+                    view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams
+                ): Boolean {
+                    fileCallback?.onReceiveValue(null)
+                    fileCallback = callback
+                    // Besides picking a file, offers taking a photo, saved where the page can upload it.
+                    val photo = PhotoProvider.uri(this@MainActivity, PhotoProvider.newPhoto(this@MainActivity))
+                    cameraPhoto = photo
+                    val camera = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                        .putExtra(MediaStore.EXTRA_OUTPUT, photo)
+                        .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    camera.clipData = ClipData.newRawUri(null, photo)
+                    val chooser = Intent.createChooser(params.createIntent(), null)
+                        .putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(camera))
+                    return try {
+                        startActivityForResult(chooser, REQUEST_FILE)
+                        true
+                    } catch (e: RuntimeException) {
+                        fileCallback = null
+                        false
+                    }
                 }
             }
             // Drags inside the page scroll the conversation; the screen itself is scrolled
@@ -930,6 +1007,7 @@ class MainActivity : Activity() {
         String.format(Locale.US, "%02d:%02d", seconds / 60, seconds % 60)
 
     private companion object {
+        const val REQUEST_FILE = 1
         const val KEY_GAME = "game"
 
         // The well-known puzzle KEY_GAME holds, if it is one; each one's progress is also

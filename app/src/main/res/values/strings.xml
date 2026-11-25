@@ -33,9 +33,11 @@
     <string name="import_title">匯入數獨題目</string>
     <string name="import_instructions">輸入 9 排數字，每排 9 個，空格用 0 表示。</string>
     <string name="import_example">530070000\n600195000\n098000060\n800060003\n400803001\n700020006\n060000280\n000419005\n000080079</string>
-    <string name="import_ai_tip">手邊只有題目照片？複製下方提示詞，連同照片一起傳給 AI（例如 Claude、ChatGPT），再把 AI 的回覆貼到上面。</string>
-    <string name="copy_prompt">複製 AI 提示詞</string>
-    <string name="prompt_copied">已複製提示詞</string>
+    <string name="import_ai_tip">手邊只有題目照片？讓 AI 幫你辨識：會在下方打開 AI 對話並帶好指示，附上照片送出，AI 回覆後按「讀取題目」。</string>
+    <string name="import_ai">用 AI 辨識照片</string>
+    <string name="import_chat_copied">指示已帶入（也已複製，對話框是空的話長按貼上）。附上題目照片送出，AI 回覆後按「讀取題目」。</string>
+    <string name="import_chat_read">讀取題目</string>
+    <string name="import_chat_none">對話裡還找不到 AI 回覆的 9 排數字，等 AI 回覆完再按一次。</string>
     <string name="import_start">開始</string>
     <string name="cancel">取消</string>
     <string name="import_checking">檢查題目中…</string>

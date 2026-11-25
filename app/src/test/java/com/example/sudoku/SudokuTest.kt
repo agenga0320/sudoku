@@ -211,6 +211,14 @@ class SudokuTest {
     }
 
     @Test
+    fun gridsFindsNineLinesOfNineDigitsInAReply() {
+        val rows = (1..9).joinToString("\n") { "12345678$it" }
+        val reply = "Here it is:\n  $rows  \nDone. 123456789\n\n${rows.replace('1', '0')}"
+        assertEquals(listOf(rows, rows.replace('1', '0')), Sudoku.grids(reply))
+        assertEquals(emptyList<String>(), Sudoku.grids(rows.lines().take(8).joinToString("\n")))
+    }
+
+    @Test
     fun everyClassicIsAValidPuzzleWithOneSolution() {
         assertEquals(Classics.all.size, Classics.all.map { it.id }.toSet().size)
         for (classic in Classics.all) {
